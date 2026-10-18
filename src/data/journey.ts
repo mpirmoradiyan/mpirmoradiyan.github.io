@@ -40,7 +40,7 @@ export const journey: Stop[] = [
   },
   {
     years: "2022 – today", kind: "work", title: "AI Lead & Computer Vision Engineer", org: "Arboair AB", place: "Linköping, Sweden",
-    url: "https://arboair.com", image: "canopy", imageAlt: "Illustration of tree crowns seen from above with segmentation outlines",
+    url: "https://arboair.com", image: "/images/work/drone-tree-crowns-closeup.jpg", imageAlt: "Close-up drone image of a forest road between a young plantation and mature trees, with each tree crown outlined and coloured by species",
     story: "Teaching machines to read forests from drone and aerial imagery: segmentation, geospatial ML, and leading the company's AI work.",
   },
 ];

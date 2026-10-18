@@ -1,6 +1,5 @@
 ---
 import Base from "../layouts/Base.astro";
-import CanopyArt from "../components/CanopyArt.astro";
 import { journey } from "../data/journey";
 const kindLabel = { school: "School", study: "University", work: "Work" } as const;
 ---
@@ -24,7 +23,7 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
           <div class="pin reveal"><span>{s.years.split(" ")[0]}</span></div>
           <article class="stop-card card reveal">
             <div class="media">
-              {s.image === "canopy" ? <CanopyArt /> : <img src={s.image} alt={s.imageAlt} loading="lazy" width="800" height="520" />}
+              <img src={s.image} alt={s.imageAlt} loading="lazy" width="800" height="520" />
               <span class={`kind ${s.kind}`}>{kindLabel[s.kind]}</span>
             </div>
             <div class="body">
