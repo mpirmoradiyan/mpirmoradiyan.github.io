@@ -29,9 +29,8 @@ export const journey: Stop[] = [
   },
   {
     years: "2009 – 2012", kind: "study", title: "MSc Geophysics (Seismology)", org: "Institute of Geophysics, University of Tehran", place: "Tehran, Iran",
-    url: "https://ig.ut.ac.ir", image: "/images/journey/tehran-institute-of-geophysics.jpg", imageAlt: "The Institute of Geophysics building at the University of Tehran",
-    credit: "Photo: Diego Delso, CC BY-SA 4.0, via Wikimedia Commons",
-    story: "A master's degree alongside field work, deepening the signal processing behind seismic data.",
+    url: "https://ig.ut.ac.ir", image: "/images/journey/ut-msc-impedance-section.jpg", imageAlt: "Illustration of an acoustic-impedance section with seismic traces, two wells and a low-impedance reservoir lens on an anticline",
+    story: "A master's degree alongside field work. My thesis used prestack seismic inversion to characterise a petroleum reservoir: turning recorded waves into rock properties.",
   },
   {
     years: "2019 – 2021", kind: "study", title: "MSc Statistics & Machine Learning", org: "Linköping University", place: "Linköping, Sweden",
