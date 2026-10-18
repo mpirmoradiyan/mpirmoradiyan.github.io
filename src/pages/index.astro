@@ -1,0 +1,94 @@
+---
+import Base from "../layouts/Base.astro";
+import HeroWaves from "../components/HeroWaves.astro";
+import NoteCard from "../components/NoteCard.astro";
+import { profile, chapters, highlights } from "../data/profile";
+import { getCollection } from "astro:content";
+import { readingMinutes } from "../data/topics";
+const notes = (await getCollection("notes")).sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+const seen = new Set<string>();
+const latest = notes.filter((n) => (seen.has(n.data.topic) ? false : (seen.add(n.data.topic), true))).slice(0, 6);
+const years = new Set(notes.map((n) => n.data.date.getUTCFullYear()));
+---
+<Base>
+  <section class="hero">
+    <div class="art"><HeroWaves /></div>
+    <div class="container hero-inner">
+      <p class="eyebrow">{profile.role} · {profile.location}</p>
+      <h1>{profile.name}</h1>
+      <p class="lead">{profile.tagline}</p>
+      <div class="cta">
+        <a class="btn primary" href="/journey/">Walk the journey</a>
+        <a class="btn" href="/notes/">Read the lab notes</a>
+        <a class="btn" href="/cv/">CV</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="container">
+    <p class="eyebrow">One thread, three chapters</p>
+    <h2 style="margin-top:0">From waves to vision</h2>
+    <p class="lead">My work has always been about the same question: what is really in this signal, and can I trust it? Only the signal has changed, from seismic waves to drone images.</p>
+    <div class="chapters">
+      {chapters.map((c, i) => (
+        <article class="chapter card reveal" style={`transition-delay:${i * 120}ms`}>
+          <div class="num">0{i + 1}</div>
+          <p class="period">{c.period}</p>
+          <h3>{c.title}</h3>
+          <p class="place">{c.place}</p>
+          <p>{c.text}</p>
+          <p class="carries"><span>Carried forward</span>{c.carries}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="container two">
+      <div>
+        <p class="eyebrow">Now</p>
+        <h2 style="margin-top:0">What I build</h2>
+        <p class="muted">At Arboair I lead the AI work behind forest analytics from drone and aerial imagery. Details stay with the company; this is the shape of it.</p>
+        <a class="btn" href="/work/">More about my work</a>
+      </div>
+      <ul class="highlights">
+        {highlights.map((h) => <li class="reveal">{h}</li>)}
+      </ul>
+    </div>
+  </section>
+
+  <section class="container">
+    <div class="section-title">
+      <div><p class="eyebrow">Lab notes</p><h2>Things I learned by building them</h2></div>
+      <a class="btn" href="/notes/">All {notes.length} notes</a>
+    </div>
+    <p class="muted" style="margin-top:.8rem">The latest note from each topic. Short, single-topic articles written from my own notebooks and experiments, spanning {Math.min(...years)} to {Math.max(...years)}.</p>
+    <div class="grid">
+      {latest.map((n) => <NoteCard id={n.id} title={n.data.title} summary={n.data.summary} topic={n.data.topic} date={n.data.date} minutes={readingMinutes(n.body)} />)}
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero { position: relative; padding: 0; min-height: min(78vh, 640px); display: grid; align-items: center; overflow: hidden; border-bottom: 1px solid var(--line); }
+  .hero .art { position: absolute; inset: 0; opacity: .8; }
+  .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--bg) 88%, transparent) 0%, color-mix(in srgb, var(--bg) 70%, transparent) 42%, transparent 70%); pointer-events: none; }
+  .hero-inner { position: relative; z-index: 1; padding: 5rem 0; }
+  .hero h1 { font-size: clamp(2.6rem, 7vw, 4.6rem); }
+  .cta { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1.6rem; }
+  .chapters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin-top: 2rem; }
+  .chapter { padding: 1.5rem; position: relative; }
+  .chapter .num { position: absolute; top: 1rem; right: 1.2rem; font-family: var(--serif); font-size: 2.4rem; color: var(--line); font-weight: 700; }
+  .chapter h3 { margin: .2rem 0 .2rem; font-size: 1.35rem; padding-right: 2.6rem; }
+  .period { font-family: var(--mono); font-size: .8rem; color: var(--signal); margin: 0; }
+  .place { color: var(--muted); font-size: .9rem; }
+  .carries { border-top: 1px dashed var(--line); padding-top: .8rem; margin: 0; font-size: .92rem; color: var(--ink-soft); }
+  .carries span { display: block; font-family: var(--mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--forest); margin-bottom: .2rem; }
+  .band { background: var(--bg-soft); border-block: 1px solid var(--line); }
+  .two { display: grid; grid-template-columns: 1fr 1.4fr; gap: 3rem; align-items: start; }
+  .highlights { list-style: none; padding: 0; margin: 0; display: grid; gap: .8rem; }
+  .highlights li { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--forest); border-radius: 10px; padding: .85rem 1rem; font-size: .97rem; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.6rem; }
+  @media (max-width: 900px) { .chapters, .grid { grid-template-columns: 1fr 1fr; } .two { grid-template-columns: 1fr; gap: 1.5rem; } }
+  @media (max-width: 620px) { .chapters, .grid { grid-template-columns: 1fr; } .hero .art { opacity: .28; } .hero::after { background: linear-gradient(180deg, transparent, var(--bg) 92%); } }
+</style>

@@ -1,0 +1,17 @@
+---
+interface Props { id: string; title: string; summary: string; topic: string; date: Date; minutes?: number }
+const { id, title, summary, topic, date, minutes } = Astro.props;
+const when = date.toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+---
+<a class="note-card card" href={`/notes/${id}/`}>
+  <div class="meta"><span class="chip">{topic}</span><span class="muted">{when}{minutes ? ` · ${minutes} min` : ""}</span></div>
+  <h3>{title}</h3>
+  <p>{summary}</p>
+</a>
+<style>
+  .note-card { display: flex; flex-direction: column; gap: .5rem; padding: 1.2rem 1.25rem 1.1rem; text-decoration: none; color: inherit; transition: transform .2s, border-color .2s; height: 100%; }
+  .note-card:hover { transform: translateY(-3px); border-color: var(--forest-soft); }
+  .note-card h3 { margin: 0; font-size: 1.12rem; line-height: 1.3; color: var(--ink); }
+  .note-card p { margin: 0; color: var(--muted); font-size: .93rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .meta { display: flex; gap: .6rem; align-items: center; font-size: .8rem; flex-wrap: wrap; }
+</style>

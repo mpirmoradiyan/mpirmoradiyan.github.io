@@ -1,0 +1,90 @@
+---
+import Base from "../layouts/Base.astro";
+import CanopyArt from "../components/CanopyArt.astro";
+import { highlights } from "../data/profile";
+const field = [
+  ["vibroseis-trucks-on-line", "Vibroseis trucks on a seismic line"],
+  ["recording-truck-in-the-field", "The recording truck in the field"],
+  ["recording-system-qc-monitors", "Quality-control monitors in the recording system"],
+  ["shot-records-printout", "Printed shot records, checked trace by trace"],
+  ["geophone-array-layout", "A geophone array laid out on the ground"],
+  ["sercel-408-field-unit", "A field acquisition unit"],
+  ["survey-in-sand-dunes", "Surveying in sand dunes"],
+  ["folded-mountain-geology", "Folded mountain geology, the target of the surveys"],
+  ["field-camp", "Field camp"],
+];
+---
+<Base title="Work" description="AI lead and computer-vision engineer for forest analytics; before that, fourteen years of seismic field operations.">
+  <section class="container">
+    <p class="eyebrow">Work</p>
+    <h1>What I do, and what led here</h1>
+    <p class="lead">I build computer-vision systems that turn drone and aerial imagery into maps of forests. The habits behind that work, checking data before trusting it and thinking in signals and geometry, come from fourteen years in seismic field operations.</p>
+  </section>
+
+  <section class="container role">
+    <div class="role-media card"><CanopyArt /></div>
+    <div>
+      <p class="eyebrow">Feb 2022 – today · Linköping, Sweden</p>
+      <h2>AI Lead &amp; Computer Vision Engineer, <a href="https://arboair.com" target="_blank" rel="noopener">Arboair AB</a></h2>
+      <p>Arboair analyses forests from drone and aerial imagery: tree species, forest damage and stand structure. I joined as a computer-vision engineer, designed the company's computer-vision platform, and now lead its AI work.</p>
+      <ul class="ticks">{highlights.map((h) => <li>{h}</li>)}</ul>
+      <p class="muted small">Specific systems, data and results belong to Arboair and are not described here.</p>
+    </div>
+  </section>
+
+  <section class="container role alt">
+    <div>
+      <p class="eyebrow">2019 – 2021 · Linköping, Sweden</p>
+      <h2>MSc Statistics &amp; Machine Learning, <a href="https://liu.se" target="_blank" rel="noopener">Linköping University</a></h2>
+      <p>A second master's degree to add statistics and machine learning to a geophysics background. The thesis, written together with Ericsson Research, studied <strong>anomaly detection and causal inference in 5G mobile networks</strong>: finding unusual behaviour in network performance data and using causal Bayesian networks to trace latency problems back to their likely causes.</p>
+      <p class="muted small">Thesis: <em>Anomaly detection and causal inference in 5G mobile networks</em>, Linköping University, 2021 (LIU-IDA/STAT-A--21/040--SE).</p>
+    </div>
+    <div class="role-media card"><img src="/images/journey/liu-campus-valla.jpg" alt="Campus Valla at Linköping University" loading="lazy" /></div>
+  </section>
+
+  <section class="container">
+    <p class="eyebrow">2005 – 2019 · Khuzestan, Iran</p>
+    <h2 style="margin-top:0">Seismic Data Acquisition QC Supervisor, <a href="https://www.nisoc.ir" target="_blank" rel="noopener">NISOC</a></h2>
+    <div class="nisoc">
+      <div>
+        <p>Fourteen years with the National Iranian South Oil Company, from junior to senior quality-control supervisor on 2D and 3D land seismic surveys. Seismic acquisition sends energy into the ground and records the echoes on large arrays of sensors; my job was to make sure those recordings were clean, consistent and in the right place, in deserts, sand dunes and folded mountains.</p>
+        <p>Alongside the field work I completed an MSc in Geophysics (Seismology) at the University of Tehran (2009–2012).</p>
+      </div>
+      <div class="carry card">
+        <h3>What carried over into computer vision</h3>
+        <ul>
+          <li><strong>Signals before models.</strong> Waves, spectra, filtering and noise are the same ideas whether the signal is a seismic trace or an image.</li>
+          <li><strong>Quality control as a habit.</strong> Checking data before trusting it is most of the work in training data, too.</li>
+          <li><strong>Geometry and geospatial thinking.</strong> Survey layouts, coordinates and terrain became orthomosaics, projections and GIS.</li>
+          <li><strong>Large, messy field data.</strong> Large daily volumes of recordings taught me to write tools instead of checking by hand.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="gallery">
+      {field.map(([f, alt]) => (
+        <figure class="reveal"><img src={`/images/field/${f}.jpg`} alt={alt} loading="lazy" /><figcaption>{alt}</figcaption></figure>
+      ))}
+    </div>
+  </section>
+</Base>
+
+<style>
+  .role { display: grid; grid-template-columns: 1fr 1.25fr; gap: 2.5rem; align-items: center; }
+  .role.alt { grid-template-columns: 1.25fr 1fr; }
+  .role h2 { margin-top: 0; }
+  .role-media { overflow: hidden; aspect-ratio: 4 / 3; }
+  .role-media img { width: 100%; height: 100%; object-fit: cover; }
+  .ticks { padding-left: 1.1em; }
+  .ticks li { margin: .45em 0; }
+  .small { font-size: .88rem; }
+  .nisoc { display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem; align-items: start; }
+  .carry { padding: 1.2rem 1.4rem; }
+  .carry h3 { margin-top: 0; }
+  .carry ul { padding-left: 1.1em; margin: 0; }
+  .carry li { margin: .5em 0; font-size: .95rem; }
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; margin-top: 2rem; }
+  .gallery figure { margin: 0; border-radius: 12px; overflow: hidden; background: var(--bg-soft); border: 1px solid var(--line); }
+  .gallery img { aspect-ratio: 4 / 3; object-fit: cover; width: 100%; }
+  .gallery figcaption { font-size: .82rem; color: var(--muted); padding: .5rem .7rem; }
+  @media (max-width: 860px) { .role, .role.alt, .nisoc { grid-template-columns: 1fr; } .role.alt .role-media { order: -1; } .gallery { grid-template-columns: 1fr 1fr; } }
+</style>

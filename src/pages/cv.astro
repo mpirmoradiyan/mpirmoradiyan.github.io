@@ -1,0 +1,104 @@
+---
+import Base from "../layouts/Base.astro";
+import { profile } from "../data/profile";
+const arboair = [
+  "Designed and lead the company's computer-vision platform: one config-driven system covering data ingestion, training-data preparation, model training, geospatial evaluation and GPU inference in production.",
+  "Train transformer-based segmentation models for tree species and forest-damage mapping: Mask2Former with DINOv3 and Swin backbones for semantic, instance and panoptic tasks, alongside Panoptic FPN, Mask R-CNN, UNet++ and DeepLabV3+.",
+  "Built self-supervised pretraining on unlabelled aerial imagery (DINO+iBOT, MoCo v3, MAE) and semi-supervised pseudo-labelling to make the most of scarce annotations.",
+  "Built the training-data foundation: a versioned data lake with provenance, intake of finished annotation jobs, reproducible dataset recipes and leakage-safe splits.",
+  "Made training and inference fast on GPUs: streaming tiled inference, asynchronous data loading and GPU preprocessing.",
+  "Turn pixel predictions into GIS-ready maps: tiled inference over very large GeoTIFFs, vectorisation, geometry repair and certainty scoring.",
+  "Built the orthomosaic pipeline: LiDAR terrain models, direct georeferencing from drone metadata, seamline mosaicking and photogrammetric true orthophotos.",
+  "Led the tree stem-diameter estimation project end to end, from field reference data and aerial height data to a production model with staged releases.",
+  "Founded and shipped production CV services (tree detection, semantic and individual-tree segmentation, orthomosaics), deployed together with the platform team.",
+  "As AI lead, set up an AI-agent-assisted engineering workflow and designed an AI-agent research process supporting the company's strategy work.",
+];
+const skills = [
+  ["Computer vision", "Semantic, instance and panoptic segmentation; object detection; vision transformers (DINOv2/v3, Swin, Mask2Former); self- and semi-supervised learning; OpenCV"],
+  ["Deep learning", "PyTorch, Hugging Face Transformers, Detectron2, segmentation-models-pytorch, timm; TensorFlow/Keras"],
+  ["Geospatial", "Rasterio, GDAL, GeoPandas, Shapely, PDAL; LiDAR; orthorectification and photogrammetry; GeoTIFF/GeoPackage"],
+  ["Data & tooling", "Python, NumPy, Polars, DuckDB, Pydantic, pytest, Streamlit, Dash, CVAT"],
+  ["Statistics", "Regression, validation design, Bayesian methods, causal inference"],
+  ["Basic / working knowledge", "Docker, AWS (S3, SQS, SageMaker), GitHub Actions; C++ (learning)"],
+];
+---
+<Base title="CV" description={`Curriculum vitae of ${profile.name}, ${profile.role}.`}>
+  <div class="narrow cv">
+    <header>
+      <h1>{profile.name}</h1>
+      <p class="role">{profile.role}</p>
+      <p class="contact">
+        <span>{profile.location}</span>
+        <a href={`mailto:${profile.email}`}>{profile.email}</a>
+        <a href={profile.linkedin}>LinkedIn</a>
+        <a href={profile.github}>GitHub</a>
+      </p>
+      <p class="noprint"><button class="btn" onclick="window.print()">Print or save as PDF</button></p>
+    </header>
+
+    <section>
+      <h2>Profile</h2>
+      <p>Computer-vision and AI engineer who builds production deep-learning systems for drone and aerial imagery: segmentation, self-supervised learning and geospatial ML. Before moving into machine learning I spent fourteen years in seismic field operations, which shaped how I work: start from the signal, check the data before trusting it, and think in geometry.</p>
+    </section>
+
+    <section>
+      <h2>Experience</h2>
+      <div class="entry">
+        <div class="when">Feb 2022 – present</div>
+        <div><h3>AI Lead &amp; Computer Vision Engineer</h3><p class="where">Arboair AB, Linköping, Sweden · drone and aerial analytics for forestry</p>
+          <ul>{arboair.map((a) => <li>{a}</li>)}</ul></div>
+      </div>
+      <div class="entry">
+        <div class="when">2005 – 2019</div>
+        <div><h3>Seismic Data Acquisition QC Supervisor (junior to senior)</h3><p class="where">National Iranian South Oil Company (NISOC), Khuzestan, Iran</p>
+          <ul>
+            <li>Quality control of 2D and 3D land seismic acquisition in deserts, sand dunes and mountains: recording quality, geometry and field procedures.</li>
+            <li>Supervised acquisition contractors' field work and reviewed survey design and field data before processing.</li>
+          </ul></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Education</h2>
+      <div class="entry"><div class="when">2019 – 2021</div><div><h3>MSc Statistics and Machine Learning</h3><p class="where">Linköping University, Sweden</p><p>Thesis with Ericsson Research: <em>Anomaly detection and causal inference in 5G mobile networks</em>.</p></div></div>
+      <div class="entry"><div class="when">2009 – 2012</div><div><h3>MSc Geophysics (Seismology)</h3><p class="where">Institute of Geophysics, University of Tehran, Iran</p></div></div>
+      <div class="entry"><div class="when">2000 – 2004</div><div><h3>BSc Petroleum Exploration Engineering</h3><p class="where">Petroleum University of Technology, Ahvaz, Iran</p></div></div>
+    </section>
+
+    <section>
+      <h2>Skills</h2>
+      <dl class="skills">{skills.map(([k, v]) => <><dt>{k}</dt><dd>{v}</dd></>)}</dl>
+    </section>
+
+    <section>
+      <h2>Learning in public</h2>
+      <p>I keep short <a href="/notes/">lab notes</a> on what I learn: computer vision, geospatial data, signal processing and machine learning.</p>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .cv { padding: 2.5rem 0; }
+  .cv header { border-bottom: 2px solid var(--forest); padding-bottom: 1rem; margin-bottom: 1rem; }
+  .cv h1 { margin-bottom: .1em; }
+  .role { font-family: var(--serif); font-size: 1.3rem; color: var(--signal); margin: 0 0 .6rem; }
+  .contact { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .92rem; color: var(--muted); margin: 0; }
+  .cv h2 { font-size: 1.25rem; text-transform: uppercase; letter-spacing: .08em; font-family: var(--sans); color: var(--forest); margin: 2rem 0 .8rem; }
+  .entry { display: grid; grid-template-columns: 150px 1fr; gap: 1rem; margin-bottom: 1.2rem; }
+  .when { font-family: var(--mono); font-size: .82rem; color: var(--muted); padding-top: .25rem; }
+  .entry h3 { margin: 0; font-size: 1.1rem; }
+  .where { color: var(--ink-soft); margin: .1rem 0 .5rem; font-size: .93rem; }
+  .entry ul { padding-left: 1.1em; margin: 0; }
+  .entry li { margin: .3em 0; font-size: .95rem; }
+  .skills { display: grid; grid-template-columns: 190px 1fr; gap: .5rem 1rem; margin: 0; }
+  .skills dt { font-weight: 600; }
+  .skills dd { margin: 0; color: var(--ink-soft); }
+  .noprint { margin-top: 1rem; }
+  .noprint .btn { cursor: pointer; font: inherit; font-weight: 600; font-size: .9rem; }
+  @media (max-width: 620px) { .entry, .skills { grid-template-columns: 1fr; gap: .2rem; } }
+  @media print {
+    :global(.site-header), :global(.site-footer), .noprint { display: none !important; }
+    :global(body) { background: #fff; color: #000; font-size: 11pt; }
+    .cv { width: 100%; padding: 0; }
+  }
+</style>

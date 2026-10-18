@@ -1,0 +1,19 @@
+{
+  "name": "mpirmoradiyan-site",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "sync": "node scripts/sync-notes.mjs",
+    "dev": "npm run sync && astro dev",
+    "build": "npm run sync && astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.3",
+    "@astrojs/sitemap": "^3.7.4",
+    "astro": "^7.4.0",
+    "katex": "^0.19.0",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0"
+  }
+}

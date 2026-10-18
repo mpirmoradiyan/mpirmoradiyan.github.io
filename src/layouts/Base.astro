@@ -1,0 +1,95 @@
+---
+import "../styles/global.css";
+import "katex/dist/katex.min.css";
+import { profile } from "../data/profile";
+
+interface Props { title?: string; description?: string; image?: string }
+const { title, description = profile.tagline, image } = Astro.props;
+const fullTitle = title ? `${title} · ${profile.name}` : `${profile.name} · ${profile.role}`;
+const path = Astro.url.pathname;
+const nav = [
+  { href: "/journey/", label: "Journey" },
+  { href: "/work/", label: "Work" },
+  { href: "/notes/", label: "Lab Notes" },
+  { href: "/cv/", label: "CV" },
+];
+const ogImage = new URL(image ?? "/images/field/vibroseis-fleet-at-sunset.jpg", Astro.site).href;
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{fullTitle}</title>
+  <meta name="description" content={description} />
+  <meta property="og:title" content={fullTitle} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={new URL(path, Astro.site).href} />
+  <meta property="og:image" content={ogImage} />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="canonical" href={new URL(path, Astro.site).href} />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="sitemap" href="/sitemap-index.xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script is:inline>
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container bar">
+      <a class="brand" href="/" aria-label="Home">
+        <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M2 16 C5 6, 8 26, 11 16 S 15 8, 16 16" fill="none" stroke="var(--signal)" stroke-width="2.2" stroke-linecap="round"/>
+          <rect x="18" y="9" width="5" height="5" rx="1" fill="var(--forest)"/><rect x="24.5" y="9" width="5" height="5" rx="1" fill="var(--forest)" opacity=".55"/>
+          <rect x="18" y="15.5" width="5" height="5" rx="1" fill="var(--forest)" opacity=".7"/><rect x="24.5" y="15.5" width="5" height="5" rx="1" fill="var(--forest)"/>
+        </svg>
+        <span>{profile.name}</span>
+      </a>
+      <div style="display:flex;align-items:center;gap:.4rem">
+        <nav class="nav" id="nav" aria-label="Main">
+          {nav.map((n) => <a href={n.href} aria-current={path.startsWith(n.href) ? "page" : undefined}>{n.label}</a>)}
+        </nav>
+        <button class="theme-toggle" id="theme" aria-label="Toggle dark mode" title="Toggle dark mode">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <button class="theme-toggle menu-btn" id="menu" aria-label="Open menu" aria-expanded="false" aria-controls="nav">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main><slot /></main>
+
+  <footer class="site-footer">
+    <div class="container row">
+      <div>© {new Date().getFullYear()} {profile.name} · {profile.location}</div>
+      <div class="links">
+        <a href={`mailto:${profile.email}`}>Email</a>
+        <a href={profile.linkedin} rel="me">LinkedIn</a>
+        <a href={profile.github} rel="me">GitHub</a>
+        <a href="/journey/#credits">Photo credits</a>
+      </div>
+    </div>
+  </footer>
+
+  <script is:inline>
+    (() => {
+      const root = document.documentElement;
+      document.getElementById("theme")?.addEventListener("click", () => {
+        const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        root.dataset.theme = dark ? "light" : "dark";
+        try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+      });
+      const nav = document.getElementById("nav"), menu = document.getElementById("menu");
+      menu?.addEventListener("click", () => { const o = nav.classList.toggle("open"); menu.setAttribute("aria-expanded", String(o)); });
+      const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -8% 0px" });
+      document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+    })();
+  </script>
+</body>
+</html>
