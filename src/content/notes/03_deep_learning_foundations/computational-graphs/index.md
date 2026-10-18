@@ -4,7 +4,7 @@ slug: computational-graphs
 date: 2024-12-14
 topic: Deep Learning Foundations
 tags: [computational-graph, derivatives, autograd, micrograd, graphviz]
-summary: "How any expression, including a neuron, can be written as a graph of values and operations, and why that graph is the data structure behind automatic differentiation."
+summary: "Any expression, even a neuron, can be written as a graph of values and operations, and that graph is what automatic differentiation runs on."
 sources:
   - title: "The spelled-out intro to neural networks and backpropagation: building micrograd"
     author: "Andrej Karpathy (Neural Networks: Zero to Hero)"
@@ -23,17 +23,17 @@ sources:
 status: draft
 ---
 
-Every deep learning framework does the same trick: it records your calculation as a graph, then walks that graph backwards to get gradients. Before writing backpropagation, it helps to see that graph clearly. This note covers what a derivative tells us, how a formula becomes a graph of nodes and operations, and how to build and draw such a graph in a few lines of Python.
+Every deep learning framework does the same trick. It writes down your calculation as a graph, then walks that graph backwards to get the gradients. Before I could understand backpropagation, I needed to see that graph clearly. So this note is about three things: what a derivative actually tells you, how a formula turns into a graph, and how to build and draw that graph with a few lines of Python.
 
 ## What a derivative tells you
 
-The derivative of $f$ at a point $x$ answers one question: if I nudge $x$ by a tiny amount $h$, how much does $f$ change, relative to $h$?
+A derivative answers one simple question: if I push $x$ a tiny bit (by $h$), how much does $f$ move, compared to that push?
 
 $$
 f'(x) = \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}
 $$
 
-Here $h$ is the size of the nudge. With a small but finite $h$ we get a numerical estimate, which is a handy way to check gradients later.
+$h$ is just the size of the push. If you pick a small but real $h$ instead of taking the limit, you get a numerical estimate. That's a handy way to check your gradients later.
 
 ```python
 def f(x):
@@ -46,18 +46,18 @@ print((f(x + h) - f(x)) / h)   # about -22.0; exact: f'(x) = 6x - 4 = -22
 
 ![Plot of f(x) = 3x^2 - 4x + 5 for x from -5 to 5: a parabola with its minimum near x = 2/3](fig-parabola.png)
 
-At $x=-3$ the curve goes down steeply as $x$ grows, so the slope is large and negative. At $x = 2/3$ the slope is zero, which is the minimum.
+At $x=-3$ the curve drops fast as $x$ grows, so the slope is big and negative. At $x = 2/3$ the slope is zero. That's the bottom of the curve.
 
-The same idea works with several inputs. For $d = a \cdot b + c$, nudging one input at a time gives the partial derivatives: $\partial d/\partial a = b$, $\partial d/\partial b = a$ and $\partial d/\partial c = 1$. The numbers confirm this: with $a=2$, $b=3$, $c=10$ the estimates come out as about 3, 2 and 1.
+It works the same with more than one input. Take $d = a \cdot b + c$ and push one input at a time. That gives the partial derivatives (the slope with respect to one input while the others stay fixed): $\partial d/\partial a = b$, $\partial d/\partial b = a$ and $\partial d/\partial c = 1$. The numbers agree: with $a=2$, $b=3$, $c=10$ the estimates come out at about 3, 2 and 1.
 
-## From formula to graph
+## Turning a formula into a graph
 
-A computational graph is a directed graph with two kinds of nodes:
+A computational graph is just a diagram with arrows and two kinds of boxes:
 
-- **Value nodes** hold numbers: inputs, parameters, intermediate results and the output.
-- **Operation nodes** (`+`, `*`, `tanh`, ...) take values in and produce a new value.
+- **Value nodes** hold numbers: inputs, parameters, in-between results and the output.
+- **Operation nodes** (`+`, `*`, `tanh`, ...) take values in and spit out a new value.
 
-Edges show which values feed which operation. For $z = (x + y)\cdot w$, the inputs $x$ and $y$ flow into `+`, the result and $w$ flow into `*`, and `*` produces $z$. Data flows from left to right. Gradients will later flow from right to left along the same edges.
+The arrows (edges) show which values go into which operation. For $z = (x + y)\cdot w$, $x$ and $y$ go into `+`, then that result and $w$ go into `*`, and `*` gives $z$. Numbers flow left to right. Later, gradients will flow right to left along the same arrows.
 
 I first drew these graphs by hand with the `graphviz` package:
 
@@ -73,11 +73,11 @@ g.edges([('x', 'add'), ('y', 'add'), ('add', 'mul'), ('w', 'mul'), ('mul', 'z')]
 g   # renders in a notebook
 ```
 
-I also tried to generate the graph automatically by parsing strings such as `"z = ((x + y) - (p + r)) * w"` character by character. That works for tiny examples but breaks quickly with nested brackets and operator precedence. The lesson was useful: you do not need a parser at all. If every arithmetic operation records its own inputs while it runs, the graph builds itself.
+I also tried building the graph automatically by reading strings like `"z = ((x + y) - (p + r)) * w"` one character at a time. That's fine for tiny examples, but it falls apart fast once you have nested brackets and operator order to deal with. Still, it taught me something: you don't need a parser at all. If every operation remembers its own inputs while it runs, the graph builds itself.
 
 ## Letting the code build the graph
 
-The approach from micrograd is to wrap each number in a small `Value` object. Overloaded operators compute the result and remember which values produced it.
+The micrograd way is to wrap each number in a small `Value` object. The `+` and `*` operators are overloaded so they compute the result and also remember which values made it.
 
 ```python
 import math
@@ -100,7 +100,7 @@ class Value:
         return Value(math.tanh(self.data), (self,), 'tanh')
 ```
 
-Now an ordinary-looking expression produces a graph as a side effect. Here is a single neuron with two inputs, $o = \tanh(x_1 w_1 + x_2 w_2 + b)$:
+Now a normal-looking expression builds a graph on the side. Here's a single neuron with two inputs, $o = \tanh(x_1 w_1 + x_2 w_2 + b)$:
 
 ```python
 x1, x2 = Value(2.0, label='x1'), Value(0.0, label='x2')
@@ -111,11 +111,11 @@ o = n.tanh()
 print(o.data)   # 0.7071...
 ```
 
-The odd bias value is chosen so that $n \approx 0.8814$ and $o = \tanh(n) \approx 1/\sqrt{2}$, which gives round numbers later.
+The weird bias value is picked on purpose: it makes $n \approx 0.8814$ and $o = \tanh(n) \approx 1/\sqrt{2}$, so the numbers come out nice later.
 
 ## Walking the graph
 
-To draw or process the graph we only need to start at the output and follow `_prev` links recursively, collecting nodes and edges:
+To draw or process the graph, start at the output and keep following the `_prev` links, collecting nodes and edges as you go:
 
 ```python
 def trace(root):
@@ -130,18 +130,18 @@ def trace(root):
     return nodes, edges
 ```
 
-Feeding these sets to `graphviz` (one record per value showing its label, data and grad, plus a small node for each operation) gives the picture below.
+Give these sets to `graphviz` (one box per value showing its label, data and grad, plus a small node for each operation) and you get the picture below.
 
 ![Computational graph of a single tanh neuron: x1*w1 and x2*w2 are added, the bias b is added to give n, and tanh(n) gives the output 0.7071](fig-neuron-graph.png)
 
-All `grad` fields are still zero. Filling them in is the job of backpropagation, which is the subject of the next note. The key point here is that the graph already contains everything needed: each node knows its inputs and the operation that combined them, and each operation has a simple local derivative.
+All the `grad` fields are still zero. Filling them in is what backpropagation does, and that's the next note. The thing to notice here is that the graph already has everything we need. Each node knows its inputs and the operation that combined them, and each operation has a simple local derivative.
 
 ## Key takeaways
 
-- A derivative measures how sensitive an output is to a small nudge of one input; a finite-difference estimate is a good sanity check.
-- A computational graph splits a formula into value nodes and operation nodes connected by edges.
-- You do not need to parse formulas. If each operation records its inputs, running the code builds the graph.
-- A recursive walk from the output over the stored inputs recovers the whole graph, which is the starting point for automatic differentiation.
+- A derivative tells you how much the output moves when you nudge one input a little. A finite-difference estimate is a good quick check.
+- A computational graph breaks a formula into value nodes and operation nodes, connected by arrows.
+- You don't need to parse formulas. If each operation remembers its inputs, just running the code builds the graph.
+- Walking back from the output through the stored inputs gives you the whole graph. That's the starting point for automatic differentiation.
 
 ## Resources
 

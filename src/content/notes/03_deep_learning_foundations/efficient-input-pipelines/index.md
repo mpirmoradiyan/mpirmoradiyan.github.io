@@ -4,7 +4,7 @@ slug: efficient-input-pipelines
 date: 2023-10-02
 topic: Deep Learning Foundations
 tags: [data-pipeline, tf-data, dataloader, prefetch, augmentation, segmentation, tensorflow, pytorch]
-summary: "How a training input pipeline loads, shuffles, transforms, batches and prefetches data so the accelerator never waits, and the four bugs (split leakage, interpolated masks, misaligned augmentation, frozen randomness) that quietly ruin results."
+summary: "How a training input pipeline loads, shuffles, transforms, batches and prefetches data so the GPU never waits, and four quiet bugs (split leakage, interpolated masks, misaligned augmentation, frozen randomness) that can ruin your results."
 sources:
   - title: "tf.data: Build TensorFlow input pipelines"
     author: "TensorFlow"
@@ -31,18 +31,18 @@ sources:
 status: draft
 ---
 
-A training step on a GPU can take a few milliseconds. Reading a JPEG from disk, decoding it, resizing it and augmenting it can take longer. If those two things happen one after the other, the expensive accelerator spends much of its time idle. An input pipeline fixes this by streaming data: it loads lazily, does the CPU work in parallel, and prepares the next batch while the current one trains. The same pipeline is also where several silent bugs live, so this note covers both speed and correctness. The examples use `tf.data`, with the PyTorch equivalent at the end; the ideas are the same in both.
+One training step on a GPU can take just a few milliseconds. Reading a JPEG from disk, decoding it, resizing it and augmenting it can take longer than that. If you do these one after the other, the GPU sits idle a lot of the time. An input pipeline fixes this by streaming the data: it loads things only when needed, does the CPU work in parallel, and gets the next batch ready while the current one trains. The pipeline is also where a few silent bugs like to hide, so this note is about both speed and getting it right. The examples use `tf.data`, with the PyTorch version at the end. The ideas are the same in both.
 
-## The stages
+## The steps
 
-Almost every pipeline has the same stages, in roughly this order:
+Almost every pipeline has the same steps, in roughly this order:
 
-1. **List** the samples, usually file paths, which are cheap to hold in memory.
+1. **List** the samples, usually as file paths, which are cheap to keep in memory.
 2. **Split** into training and validation sets, once, before anything random happens.
 3. **Shuffle** the training set.
-4. **Load and decode** each sample (read bytes, decode the image, resize). This step is slow and runs in parallel.
+4. **Load and decode** each sample (read the bytes, decode the image, resize). This is the slow part, so it runs in parallel.
 5. **Cache** the decoded samples, if they fit in memory or on a fast disk.
-6. **Augment** (random flips, crops, colour changes). This must run *after* the cache, or every epoch will see the same "random" version.
+6. **Augment** (random flips, crops, colour changes). This has to come *after* the cache, or every epoch sees the same "random" version.
 7. **Batch.**
 8. **Prefetch**, so the next batch is ready before the model asks for it.
 
@@ -61,15 +61,15 @@ def make_pipeline(paths_ds, load_fn, augment_fn, batch_size, training):
     return ds.batch(batch_size).prefetch(AUTOTUNE)           # overlap loading with training
 ```
 
-Shuffling paths before loading is cheap, because the shuffle buffer holds strings, not images. Note that `shuffle` only mixes within its buffer: with a buffer of 100 and a dataset sorted by class, the first batches will still contain only the first class. Use a buffer at least as large as the dataset when you can, or shuffle the file list once up front.
+Shuffling the paths before loading is cheap, because the shuffle buffer holds strings, not images. One thing that surprised me: `shuffle` only mixes things inside its buffer. With a buffer of 100 and a dataset sorted by class, the first batches will still only have the first class. Use a buffer at least as big as the dataset if you can, or shuffle the file list once at the start.
 
 ## Why prefetch and parallel map matter
 
-`map(..., num_parallel_calls=AUTOTUNE)` decodes several samples at once on different CPU cores. `prefetch` runs the pipeline in the background, so batch $b+1$ is prepared while batch $b$ trains.
+`map(..., num_parallel_calls=AUTOTUNE)` decodes several samples at the same time on different CPU cores. `prefetch` runs the pipeline in the background, so batch $b+1$ is being prepared while batch $b$ trains.
 
 ![Two timelines. Without prefetch, loading and training alternate and each waits for the other. With prefetch, each batch loads while the previous batch trains, so training steps run back to back.](fig-prefetch-timeline.png)
 
-A small benchmark with a fake 10 ms "decode" and a fake 20 ms "training step" shows the effect:
+A small benchmark with a fake 10 ms "decode" and a fake 20 ms "training step" shows the difference:
 
 ```python
 import time
@@ -90,7 +90,7 @@ print(f"naive: {run(naive):.2f} s, parallel map + prefetch: {run(fast):.2f} s")
 # naive: 3.20 s, parallel map + prefetch: 0.79 s
 ```
 
-The naive version pays $32 \times (8 \times 10 + 20)$ ms $\approx 3.2$ s. The fast one is close to the pure training time of $32 \times 20$ ms $= 0.64$ s. Once loading is fully hidden, the model is the bottleneck, which is where you want it to be.
+The naive version pays $32 \times (8 \times 10 + 20)$ ms $\approx 3.2$ s. The fast one gets close to the pure training time of $32 \times 20$ ms $= 0.64$ s. Once loading is completely hidden, the model itself is the slow part, which is what you want.
 
 ## Bug 1: a split that changes every epoch
 
@@ -107,11 +107,11 @@ for epoch in range(5):
 print(len(seen_in_val), "different files appeared in 'validation' over 5 epochs")   # several, e.g. 4 to 7
 ```
 
-`Dataset.list_files` shuffles by default, and the shuffle is redone every epoch. So `take` and `skip` pick a *different* subset each time, and over a few epochs the model trains on every validation image. The validation score then looks far better than reality. The fix is to make the order fixed (`shuffle=False`, or one shuffle with `reshuffle_each_iteration=False`), split, and only then shuffle the training part. Better still, split the file lists on disk before building any pipeline, and split by group when samples are correlated (see [grouped cross-validation](/notes/grouped-cross-validation/)).
+This one was sneaky. `Dataset.list_files` shuffles by default, and it reshuffles every epoch. So `take` and `skip` grab a *different* subset each time, and after a few epochs the model has trained on every validation image. The validation score then looks much better than it really is. The fix is to make the order fixed (`shuffle=False`, or one shuffle with `reshuffle_each_iteration=False`), split, and only then shuffle the training part. Even better, split the file lists on disk before building any pipeline, and split by group when samples are related to each other (see [grouped cross-validation](/notes/grouped-cross-validation/)).
 
 ## Bug 2: interpolated masks
 
-A segmentation mask stores class IDs, not intensities. Resizing it like an image invents labels that do not exist:
+A segmentation mask holds class IDs, not brightness values. If you resize it like an image, you invent labels that don't exist:
 
 ```python
 mask = tf.constant([[0, 0, 3, 3]] * 4, dtype=tf.float32)[..., None]   # labels 0 and 3 only
@@ -121,11 +121,11 @@ print(sorted(set(tf.image.resize(mask, [4, 8], method="nearest").numpy().ravel()
 # [0.0, 3.0]
 ```
 
-After casting to integers, the boundary between class 0 and class 3 gains a thin band of classes 0 to 2. Always resize masks, and apply geometric augmentation to them, with **nearest-neighbour** interpolation. I had used the same `decode_and_resize` function for images and masks; the masks needed their own.
+After casting to integers, the edge between class 0 and class 3 gets a thin band of classes 0 to 2. So always resize masks, and apply geometric augmentation to them, with **nearest-neighbour** interpolation (just copy the closest pixel's value). I had used the same `decode_and_resize` function for images and masks. The masks needed their own.
 
-## Bug 3 and 4: augmentation that is misaligned or not random
+## Bugs 3 and 4: augmentation that's misaligned or not actually random
 
-For segmentation and detection, every geometric change to the image must be applied identically to the label. Colour changes go to the image only. The clean way is a stateless random op with one shared seed per sample:
+For segmentation and detection, every geometric change to the image (flip, crop, rotate) has to be applied in exactly the same way to the label. Colour changes go to the image only. The clean way to do this is a stateless random op with one shared seed per sample:
 
 ```python
 def augment_pair(image, mask):
@@ -136,7 +136,7 @@ def augment_pair(image, mask):
     return image, mask
 ```
 
-My first version made the seed with NumPy: `seed = tf.constant([rng.integers(0, 100), ...])`. That looks random, but `Dataset.map` traces the function into a graph **once**. Python and NumPy code runs only during that trace, so the seed became a constant, and every sample got the same "random" flip:
+My first version made the seed with NumPy: `seed = tf.constant([rng.integers(0, 100), ...])`. That looks random, but `Dataset.map` traces the function into a graph **once**. Python and NumPy code only runs during that trace, so the seed turned into a constant and every sample got the same "random" flip:
 
 ```python
 import numpy as np
@@ -150,11 +150,11 @@ ds = tf.data.Dataset.from_tensors(tf.zeros([2, 2, 1])).repeat(4).map(augment_wro
 print([tuple(s.numpy()) for _, s in ds])   # the same seed four times
 ```
 
-The general rule: inside anything that is traced into a graph (`Dataset.map`, `tf.function`, and also `torch.compile` in many cases), randomness must come from the framework's own random ops. Python-side randomness is frozen at trace time.
+The general rule I took from this: inside anything that gets traced into a graph (`Dataset.map`, `tf.function`, and in many cases `torch.compile` too), randomness has to come from the framework's own random ops. Python-side randomness gets frozen at trace time.
 
 ## The same ideas in PyTorch
 
-PyTorch splits the job between a `Dataset`, which knows how to load sample $i$, and a `DataLoader`, which handles shuffling, batching and parallelism:
+PyTorch splits the job in two. A `Dataset` knows how to load sample $i$, and a `DataLoader` handles shuffling, batching and parallel loading:
 
 | tf.data | PyTorch |
 |---|---|
@@ -164,15 +164,15 @@ PyTorch splits the job between a `Dataset`, which knows how to load sample $i$, 
 | `cache()` | keep decoded tensors in the `Dataset`, or pre-decode to fast storage |
 | — | `pin_memory=True` for faster host-to-GPU copies |
 
-With the same fake 10 ms load and 20 ms step, four workers cut the time from 3.9 s to 2.4 s on my laptop. Most of the rest was the cost of starting worker processes on macOS, which `persistent_workers=True` pays only once across epochs. Because PyTorch workers run ordinary Python, NumPy randomness *does* change per sample. Each worker needs its own seed, though, or older setups can give identical augmentations in every worker (see `worker_init_fn` in the docs).
+With the same fake 10 ms load and 20 ms step, four workers cut the time from 3.9 s to 2.4 s on my laptop. Most of what was left was the cost of starting worker processes on macOS, which `persistent_workers=True` pays only once instead of every epoch. Since PyTorch workers run normal Python, NumPy randomness *does* change per sample. Each worker needs its own seed, though, or older setups can give the same augmentations in every worker (see `worker_init_fn` in the docs).
 
 ## Key takeaways
 
 - Stream the data: list paths, decode in parallel, cache decoded samples, augment after the cache, batch, and prefetch.
-- Prefetching overlaps loading with training; when it works, epoch time approaches pure compute time.
-- Split once, before any shuffling. A reshuffled source followed by `take`/`skip` silently leaks validation data into training.
+- Prefetching overlaps loading with training. When it works, an epoch takes about as long as the compute alone.
+- Split once, before any shuffling. A reshuffled source followed by `take`/`skip` quietly leaks validation data into training.
 - Resize and warp masks with nearest-neighbour interpolation, and apply geometric augmentations to image and label with the same random parameters.
-- In traced code, randomness must come from framework ops; Python or NumPy random calls run once, at trace time.
+- In traced code, randomness has to come from framework ops. Python or NumPy random calls run once, at trace time.
 
 ## Resources
 

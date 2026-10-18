@@ -4,7 +4,7 @@ slug: anchors-and-region-proposal-networks
 date: 2025-12-17
 topic: Computer Vision
 tags: [anchors, rpn, faster-rcnn, object-detection, nms, roialign, box-regression, numpy, pytorch]
-summary: "Why detectors place fixed reference boxes on a grid, how an RPN scores and adjusts them, how anchors are labelled and sampled for training, and how the surviving proposals feed the second stage through RoIAlign."
+summary: "Why detectors put fixed boxes on a grid, how an RPN scores and nudges them, how they get labelled for training, and how the best ones go on to the second stage."
 sources:
   - title: "Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks"
     author: "Shaoqing Ren, Kaiming He, Ross Girshick, Jian Sun"
@@ -39,22 +39,22 @@ sources:
 status: draft
 ---
 
-A convolutional network outputs a grid of feature vectors, one per cell. A detector must output a short list of boxes of any size and shape. Anchors are the bridge between the two: a fixed set of reference boxes placed on the grid, which the network only has to score and nudge. The Region Proposal Network (RPN) from Faster R-CNN does exactly that, and its output, a few hundred to a few thousand candidate boxes, is what the second stage of a two-stage detector classifies and refines.
+This one confused me for a while. A CNN gives you a grid of feature vectors, one per cell. But a detector has to give you a short list of boxes, and those boxes can be any size and shape. So how do you get from one to the other? Anchors are the bridge. They're a fixed set of boxes placed on the grid ahead of time, and the network only has to score them and nudge them a bit. The Region Proposal Network (RPN) from Faster R-CNN does exactly that. What comes out is a few hundred to a few thousand candidate boxes, and the second stage of a two-stage detector then classifies and refines those.
 
-## Why anchors exist
+## Why we need anchors at all
 
-The naive idea is to let each grid cell predict one box from scratch. Two things go wrong. Objects come in very different sizes and shapes, and one box per cell cannot cover a tall person and a wide car centred at the same place. And regressing absolute pixel coordinates is hard to learn: the target range is huge and depends on image size.
+The obvious first idea is to let each grid cell predict one box from scratch. Two things go wrong. First, objects come in very different sizes and shapes. One box per cell can't cover a tall person and a wide car that happen to be centred at the same spot. Second, predicting raw pixel coordinates is hard to learn. The numbers can be huge, and they depend on the image size.
 
-An **anchor** is a box $(x_0, y_0, x_1, y_1)$ fixed in advance at a known position, size and aspect ratio. The network predicts, per anchor:
+An **anchor** is a box $(x_0, y_0, x_1, y_1)$ that's fixed in advance, with a known position, size and aspect ratio (height divided by width). For each anchor, the network predicts:
 
-- an **objectness** score: does this anchor cover an object (of any class)?
-- four **deltas**: how to shift and stretch this anchor to fit that object.
+- an **objectness** score: is there an object here (any class)?
+- four **deltas**: how to shift and stretch this anchor so it fits that object.
 
-Learning a small correction to a sensible template is far easier than inventing a box, and having several templates per cell lets different shapes at the same location go to different anchors. Anchors themselves are not learned and do not depend on image content. They only depend on the feature map size, the stride and the chosen sizes and ratios.
+The way I think about it: learning a small fix to a sensible starting box is much easier than drawing a box out of nothing. And with several starting boxes per cell, different shapes at the same location can go to different anchors. One thing that tripped me up: anchors aren't learned, and they don't look at the image at all. They only depend on the feature map size, the stride and the sizes and ratios you pick.
 
-## Placing anchors on the grid
+## Putting anchors on the grid
 
-A feature map with stride $s$ has cells every $s$ input pixels. At each cell we place $A$ anchors: one per aspect ratio $r = h/w$, all with the same area $S^2$:
+A feature map with stride $s$ has one cell every $s$ input pixels. At each cell we put $A$ anchors: one per aspect ratio $r = h/w$, all with the same area $S^2$:
 
 $$
 w = \frac{S}{\sqrt{r}}, \qquad h = S\sqrt{r}
@@ -99,18 +99,18 @@ first cell of P4:
  [-37.3 -82.5  53.3  98.5]]
 ```
 
-Some details:
+A few small things worth knowing:
 
-- **Centre offset.** Cell $(i, j)$ can be centred at $((j + 0.5)s, (i + 0.5)s)$ or at $(js, is)$. Libraries differ on this. It hardly matters for accuracy, but anchors and deltas must use the same convention at training and test time.
-- **Single-scale map vs pyramid.** The original Faster R-CNN used one stride-16 map with 3 sizes × 3 ratios = 9 anchors per cell. With an [FPN](/notes/feature-pyramid-networks/), each level gets one size and 3 ratios, because the level itself already encodes scale.
-- **Anchors can stick out of the image.** Near the border, large anchors extend past the edges. They are still valid; the decoded boxes are clipped later.
-- About 65,000 anchors for a $512\times512$ image, and 75% of them on $P_2$. The finest level dominates the cost.
+- **Where the centre goes.** Cell $(i, j)$ can be centred at $((j + 0.5)s, (i + 0.5)s)$ or at $(js, is)$. Libraries don't agree on this. It barely changes accuracy, but you have to use the same choice for anchors and deltas at training and test time.
+- **One map or a pyramid.** The original Faster R-CNN used one stride-16 map with 3 sizes × 3 ratios = 9 anchors per cell. With an [FPN](/notes/feature-pyramid-networks/), each level gets one size and 3 ratios, because the level already takes care of scale.
+- **Anchors can stick out of the image.** Near the edges, big anchors go past the border. That's fine. The final boxes get clipped later.
+- That's about 65,000 anchors for a $512\times512$ image, and 75% of them sit on $P_2$. So the finest level is where most of the cost is.
 
 ![Anchors on a synthetic 256 by 256 image at stride 16 with size 64: two ground-truth boxes, positive anchors in green, ignored anchors in orange, negative anchor centres as small grey dots](fig-anchor-labels.png)
 
 ## The RPN head
 
-The head is tiny: a $3\times3$ convolution (a small sliding window over the features), then two $1\times1$ convolutions. One gives $A$ objectness logits per cell, the other gives $4A$ deltas. With an FPN the same head runs on every level.
+The head is surprisingly small. It's a $3\times3$ convolution (a little sliding window over the features), followed by two $1\times1$ convolutions. One gives $A$ objectness logits per cell (raw scores before a sigmoid), and the other gives $4A$ deltas. With an FPN, the same head runs on every level.
 
 ```python
 import torch, torch.nn as nn, torch.nn.functional as F
@@ -142,17 +142,17 @@ for logits, deltas in head([torch.randn(1, 256, 32, 32), torch.randn(1, 256, 16,
 (1, 768) (1, 768, 4)
 ```
 
-The `permute` before `reshape` matters: it puts all $A$ predictions of one cell next to each other, which is the same order `make_anchors` uses. A mismatch here silently pairs predictions with the wrong anchors. The RPN is **class-agnostic**: it only says "object" or "not object". Classes come in the second stage.
+Watch out for the `permute` before `reshape`. It puts all $A$ predictions for one cell next to each other, which is the same order `make_anchors` uses. If the orders don't match, predictions get paired with the wrong anchors and nothing warns you. Also, the RPN is **class-agnostic**: it only says "object" or "not object". The actual classes come in the second stage.
 
-## Encoding a box relative to an anchor
+## Writing a box relative to an anchor
 
-The network never predicts coordinates. It predicts deltas in a normalised form (introduced with R-CNN's box regression). Write each box as centre $(x, y)$, width $w$, height $h$; subscript $a$ for the anchor and $g$ for the ground truth:
+The network never predicts coordinates directly. It predicts deltas in a normalised form (this idea comes from R-CNN's box regression). Write each box as a centre $(x, y)$, width $w$ and height $h$. Subscript $a$ means the anchor and $g$ means the ground truth (the real box):
 
 $$
 t_x = \frac{x_g - x_a}{w_a},\quad t_y = \frac{y_g - y_a}{h_a},\quad t_w = \log\frac{w_g}{w_a},\quad t_h = \log\frac{h_g}{h_a}
 $$
 
-Dividing shifts by the anchor size makes a 5-pixel shift on a small anchor and a 50-pixel shift on a large one look the same. The log turns "twice as wide" and "half as wide" into $+0.69$ and $-0.69$, symmetric around 0, and guarantees positive widths after decoding. Decoding inverts the formulas. Real implementations also clamp $t_w, t_h$ (for example at $\log(1000/16)$) so that one bad prediction cannot produce an overflow with `exp`.
+Why these formulas? Dividing the shift by the anchor size makes a 5-pixel shift on a small anchor look the same as a 50-pixel shift on a big one. The log turns "twice as wide" and "half as wide" into $+0.69$ and $-0.69$, nicely balanced around 0, and it also means widths always come out positive when you decode. Decoding just runs the formulas backwards. Real code also clamps $t_w, t_h$ (for example at $\log(1000/16)$) so one bad prediction can't blow up through `exp`.
 
 ```python
 def to_cxcywh(b):
@@ -182,7 +182,7 @@ deltas: [[ 0.281 -0.188  0.223 -0.065]]  round trip: [[110.  90. 190. 150.]]
 
 ## Labelling anchors for training
 
-Training needs a target for every anchor. The rule from Faster R-CNN uses the Intersection over Union (IoU) between each anchor and each ground-truth box (IoU itself is explained in the [overlap-based losses note](/notes/overlap-based-losses/)):
+To train, every anchor needs a target. Faster R-CNN decides it using Intersection over Union (IoU), which is how much two boxes overlap, between each anchor and each ground-truth box (more on IoU in the [overlap-based losses note](/notes/overlap-based-losses/)):
 
 | Best IoU with any ground truth | Label |
 |---|---|
@@ -190,7 +190,7 @@ Training needs a target for every anchor. The rule from Faster R-CNN uses the In
 | $< 0.3$ | negative (0) |
 | in between | ignored (−1), no loss |
 
-Plus one extra rule: each ground-truth box also makes its highest-IoU anchor(s) positive, even if that IoU is below 0.7. Without it, an object with an odd size or position might get no positive anchor at all and could never be learned.
+There's one extra rule that's easy to miss: each ground-truth box also makes its best-matching anchor(s) positive, even if the IoU is below 0.7. Without this, an object with a strange size or position might get no positive anchor at all, and the network could never learn it.
 
 ```python
 def box_iou(a, b):                                    # (N, 4), (M, 4) -> (N, M)
@@ -222,7 +222,7 @@ print("positive:", (labels == 1).sum(), " negative:", (labels == 0).sum(),
 positive: 4  negative: 706  ignored: 58
 ```
 
-The imbalance is extreme: a handful of positives against hundreds of negatives (tens of thousands in a real image). So each image contributes a **sample** of 256 anchors, at most half positive, filled up with random negatives. The loss is binary cross-entropy on the sampled anchors' objectness, plus a smooth-L1 (or similar) loss on the deltas of the **positive** anchors only, with targets `encode(anchors[pos], gt[match[pos]])`. Negatives have no box to regress to.
+That's a huge imbalance: a handful of positives against hundreds of negatives (tens of thousands in a real image). So each image only gives a **sample** of 256 anchors, at most half positive, topped up with random negatives. The loss is binary cross-entropy on the objectness of those sampled anchors, plus a smooth-L1 (or similar) loss on the deltas of the **positive** anchors only, with targets `encode(anchors[pos], gt[match[pos]])`. Negatives don't get a box loss, because there's no box for them to move towards.
 
 ```python
 def sample(labels, batch=256, pos_fraction=0.5, rng=np.random.default_rng(0)):
@@ -242,13 +242,13 @@ print(len(pos_idx), "positives,", len(neg_idx), "negatives; targets", targets.sh
 
 ## From scores to proposals: top-k and NMS
 
-At inference every anchor gets a score and a decoded box, and most of them are background or duplicates. The standard clean-up per image:
+At inference, every anchor gets a score and a decoded box, and most of them are background or duplicates. The usual clean-up for each image goes like this:
 
-1. Per level, keep the top-k anchors by objectness (for example 1000 to 2000).
-2. Decode them to boxes and clip the boxes to the image.
-3. Drop boxes that are nearly empty (width or height close to 0).
-4. Run **non-maximum suppression (NMS)**: repeatedly take the highest-scoring box and delete every other box that overlaps it with IoU above a threshold (0.7 for the RPN, which is loose because recall matters more than precision here).
-5. Keep the best ~1000 proposals over all levels.
+1. On each level, keep the top-k anchors by objectness (say 1000 to 2000).
+2. Decode them into boxes and clip the boxes to the image.
+3. Throw away boxes that are nearly empty (width or height close to 0).
+4. Run **non-maximum suppression (NMS)**: take the highest-scoring box, delete every other box that overlaps it with IoU above a threshold, and repeat. The RPN uses 0.7, which is loose on purpose, because at this stage not missing objects matters more than having a few extra boxes.
+5. Keep the best ~1000 proposals across all levels.
 
 ```python
 def nms(boxes, scores, iou_thresh=0.7):
@@ -270,16 +270,16 @@ print("kept", len(nms(boxes, scores)), "of", len(boxes))
 kept 2 of 20
 ```
 
-Greedy NMS has a known weakness: two real objects that overlap heavily (a crowd, or tightly packed objects) can suppress each other. Soft-NMS, which lowers the score of overlapping boxes instead of deleting them, is one remedy.
+This greedy NMS has a weak spot. If two real objects overlap a lot (a crowd, or things packed tightly together), they can wipe each other out. Soft-NMS is one fix: instead of deleting overlapping boxes, it just lowers their scores.
 
-## How proposals feed the second stage
+## How proposals go into the second stage
 
-The second stage (the "RoI heads" of Fast R-CNN and Mask R-CNN) takes each proposal, picks a pyramid level by box size (see the [FPN note](/notes/feature-pyramid-networks/)) and cuts out a fixed-size feature grid for it, typically $7\times7$ for boxes and $14\times14$ for masks. During training the proposals are relabelled against the ground truth (IoU $\ge 0.5$ means foreground) and sampled again, usually 512 per image with up to 25% foreground. The ground-truth boxes are also added to the proposals so that every object has at least one perfect example. The head then predicts a class and a class-specific box refinement, and, in Mask R-CNN, a mask.
+The second stage (the "RoI heads" in Fast R-CNN and Mask R-CNN; RoI means region of interest) takes each proposal, picks a pyramid level based on the box size (see the [FPN note](/notes/feature-pyramid-networks/)), and cuts out a fixed-size feature grid for it. That's usually $7\times7$ for boxes and $14\times14$ for masks. During training, the proposals are labelled again against the ground truth (IoU $\ge 0.5$ means foreground) and sampled again, usually 512 per image with up to 25% foreground. The ground-truth boxes are also added to the proposals, so every object has at least one perfect example. The head then predicts a class and a box fix for that class, and in Mask R-CNN, a mask too.
 
-How the feature grid is cut out matters for precise boxes and masks:
+How you cut out that feature grid matters a lot if you want precise boxes and masks:
 
-- **RoIPool** (Fast R-CNN) rounds the box to whole feature cells, then splits it into bins and rounds again. On a stride-16 map one rounding step can move the box by up to 15 input pixels.
-- **RoIAlign** (Mask R-CNN) keeps fractional coordinates and samples each bin with bilinear interpolation. This removes the misalignment and improved mask accuracy clearly in the Mask R-CNN paper.
+- **RoIPool** (Fast R-CNN) rounds the box to whole feature cells, splits it into bins, and rounds again. On a stride-16 map, one rounding step can move the box by up to 15 input pixels.
+- **RoIAlign** (Mask R-CNN) keeps the fractional coordinates and samples each bin with bilinear interpolation (a weighted average of the four nearest cells). That removes the misalignment, and in the Mask R-CNN paper it clearly improved mask accuracy.
 
 ```python
 from torchvision.ops import roi_align, roi_pool
@@ -295,15 +295,15 @@ RoIPool : [4.0, 6.0, 8.0, 9.0]
 RoIAlign: [2.95, 4.65, 6.35, 8.05]
 ```
 
-Cell $j$ holds the value $j$ and is centred at $x = j + 0.5$, so the true feature at position $x$ is $x - 0.5$. Four bins spanning $x = 2.6$ to $9.4$ have centres 3.45, 5.15, 6.85 and 8.55, so the right answer is 2.95, 4.65, 6.35 and 8.05: evenly spaced, 1.7 apart. RoIAlign gets exactly that. RoIPool snaps the box to cells 3 to 9, takes the maximum per bin, and returns uneven steps.
+This toy example made it click for me. Cell $j$ holds the value $j$ and is centred at $x = j + 0.5$, so the true feature at position $x$ is $x - 0.5$. Four bins from $x = 2.6$ to $9.4$ have centres at 3.45, 5.15, 6.85 and 8.55, so the right answer is 2.95, 4.65, 6.35 and 8.05: evenly spaced, 1.7 apart. RoIAlign gets exactly that. RoIPool snaps the box to cells 3 to 9, takes the max in each bin, and gives uneven steps.
 
 ## Key takeaways
 
-- Anchors are fixed reference boxes on the feature grid; the network only scores them and predicts small, normalised corrections.
-- Deltas are $(\Delta x / w_a, \Delta y / h_a, \log(w/w_a), \log(h/h_a))$, which makes the targets scale-free.
-- Training labels come from IoU: positive $\ge 0.7$, negative $< 0.3$, plus the best anchor of every object; then 256 anchors are sampled per image.
-- Inference: top-k per level, decode, clip, NMS at 0.7, keep about 1000 proposals.
-- The second stage pools a fixed grid per proposal; RoIAlign avoids the rounding errors of RoIPool.
+- Anchors are fixed boxes on the feature grid. The network just scores them and predicts small, normalised fixes.
+- Deltas are $(\Delta x / w_a, \Delta y / h_a, \log(w/w_a), \log(h/h_a))$, so the targets don't depend on object size.
+- Training labels come from IoU: positive if $\ge 0.7$, negative if $< 0.3$, plus the best anchor for every object. Then 256 anchors are sampled per image.
+- At inference: top-k per level, decode, clip, NMS at 0.7, keep about 1000 proposals.
+- The second stage cuts out a fixed grid for each proposal. RoIAlign avoids the rounding errors that RoIPool has.
 
 ## Resources
 

@@ -4,7 +4,7 @@ slug: yolo-v1-detection-as-regression
 date: 2023-03-29
 topic: Computer Vision
 tags: [yolo, object-detection, one-stage-detector, loss-function, pytorch]
-summary: "How YOLOv1 turns detection into a single forward pass that fills an S x S x (5B + C) tensor, how targets are encoded into that grid, and why its sum-of-squares loss is weighted the way it is."
+summary: "How YOLOv1 does detection in one pass by filling an S x S x (5B + C) tensor, how the labels are packed into that grid, and why its squared-error loss is weighted the way it is."
 sources:
   - title: "You Only Look Once: Unified, Real-Time Object Detection"
     author: "Joseph Redmon, Santosh Divvala, Ross Girshick, Ali Farhadi"
@@ -19,11 +19,11 @@ sources:
 status: draft
 ---
 
-Before YOLO, the best detectors worked in two stages: first propose a few thousand candidate regions, then classify each one. That is accurate but slow, because the network runs many times per image. YOLOv1 (2015) asked a simpler question: can one network look at the whole image once and directly output every box and its class? The answer was yes, at 45 frames per second. Almost every modern real-time detector still follows the idea it introduced: a grid of cells, each predicting boxes from the features at its location.
+Before YOLO, the best detectors worked in two stages. First they proposed a few thousand candidate regions, then they classified each one. That's accurate but slow, because the network runs many times per image. YOLOv1 (2015) asked a simpler question: can one network look at the whole image once and directly spit out every box and its class? It turned out yes, at 45 frames per second. Almost every real-time detector today still uses the idea it started: a grid of cells, where each cell predicts boxes from the features at its spot.
 
 ## The grid idea
 
-YOLOv1 resizes the image to 448×448 and splits it into an $S \times S$ grid, with $S = 7$. Each object is assigned to exactly one cell: the cell that contains the **centre** of its box. That cell is "responsible" for the object. All other cells must learn to say "nothing here".
+YOLOv1 resizes the image to 448×448 and cuts it into an $S \times S$ grid, with $S = 7$. Each object belongs to exactly one cell: the cell that has the **centre** of its box. That cell is "responsible" for the object. Every other cell has to learn to say "nothing here".
 
 ![A 7x7 grid over an image. Two boxes are drawn; the cell containing each box centre is shaded, showing which cell is responsible for that object.](fig-yolo-grid.png)
 
@@ -32,17 +32,17 @@ Each cell predicts:
 - $B$ boxes (the paper uses $B = 2$). Each box has five numbers: $x, y, w, h$ and a **confidence**.
 - $C$ class probabilities (20 for Pascal VOC), shared by the cell's boxes.
 
-So the whole output is one tensor of shape $S \times S \times (5B + C) = 7 \times 7 \times 30$. Detection has become regression: the network fills a fixed-size tensor, and a loss compares it with a target tensor of the same layout.
+So the whole output is one tensor of shape $S \times S \times (5B + C) = 7 \times 7 \times 30$. That's the bit that made it click for me: detection has turned into regression. The network just fills a fixed-size tensor, and the loss compares it with a target tensor laid out the same way.
 
-The coordinates are chosen so that every number lives in a small, predictable range:
+The coordinates are set up so every number stays in a small, predictable range:
 
-- $x, y$ are the box centre **relative to the cell**, in $[0, 1)$. A value of $(0.5, 0.5)$ means the centre of the cell.
+- $x, y$ are the box centre **relative to the cell**, in $[0, 1)$. So $(0.5, 0.5)$ means the middle of the cell.
 - $w, h$ are the box width and height **relative to the whole image**, in $[0, 1]$.
-- The confidence is trained towards $P(\text{object}) \times \text{IoU}(\text{pred}, \text{truth})$. It is zero for empty cells and equals the IoU of the predicted box with the ground truth for the responsible box.
+- The confidence is trained towards $P(\text{object}) \times \text{IoU}(\text{pred}, \text{truth})$. It's zero for empty cells, and for the responsible box it equals the IoU (overlap) between the predicted box and the real one.
 
-## Encoding the targets
+## Packing the labels into the grid
 
-Training data usually comes as normalised $(c_x, c_y, w, h)$ boxes per image (the "YOLO format"). Turning them into the grid target is a few lines:
+Labels usually come as normalised $(c_x, c_y, w, h)$ boxes per image (the "YOLO format"). Turning them into the grid target only takes a few lines:
 
 ```python
 import torch
@@ -66,15 +66,15 @@ print(t.shape)                       # torch.Size([7, 7, 25])
 print(t[..., C].nonzero().tolist())  # [[2, 3], [6, 0]]: cells that own an object
 ```
 
-The target stores only one box per cell, while the prediction has $B = 2$. During training, the predicted box with the higher IoU against the ground truth becomes the responsible one. Over time the two box slots specialise: one tends to handle tall objects, the other wide ones.
+The target only stores one box per cell, but the prediction has $B = 2$. This confused me at first. During training, whichever predicted box has the higher IoU with the real box becomes the responsible one. Over time the two box slots specialise: one tends to take tall objects, the other wide ones.
 
-Notice the `if` line. If two object centres fall into the same cell, the second one is simply dropped. This is a real limit of YOLOv1, not a coding shortcut.
+Look at the `if` line. If two object centres land in the same cell, the second one just gets dropped. That's a real limit of YOLOv1, not a shortcut in my code.
 
 ## The network
 
-The backbone is a GoogLeNet-inspired stack of 24 convolutional layers. It alternates $1\times1$ "reduction" convolutions with $3\times3$ convolutions, followed by two fully connected layers. The last layer outputs $7 \cdot 7 \cdot 30 = 1470$ numbers, which are reshaped into the grid. Because the head is fully connected, every cell's prediction can use information from the whole image. Later YOLO versions replaced the fully connected head with convolutions (see [dense detection heads](/notes/dense-detection-heads/)).
+The backbone is a stack of 24 convolutional layers, inspired by GoogLeNet. It switches between $1\times1$ "reduction" convolutions (they shrink the number of channels) and $3\times3$ convolutions, and ends with two fully connected layers. The last layer gives $7 \cdot 7 \cdot 30 = 1470$ numbers, which get reshaped into the grid. Since the head is fully connected, each cell's prediction can use information from the whole image. Later YOLO versions swapped the fully connected head for convolutions (see [dense detection heads](/notes/dense-detection-heads/)).
 
-## The loss, term by term
+## The loss, one piece at a time
 
 Everything is trained with sum-squared error, but with weights that fix three problems. Let $\mathbb{1}_{ij}^{\text{obj}}$ be 1 when box $j$ of cell $i$ is responsible for an object, and $\mathbb{1}_{ij}^{\text{noobj}}$ be 1 otherwise. Hats mark predictions.
 
@@ -90,15 +90,15 @@ $$
 
 Here $C_i$ is the confidence, $p_i(c)$ the probability of class $c$, and $\mathbb{1}_i^{\text{obj}}$ is 1 if any object's centre is in cell $i$.
 
-1. **Empty cells dominate.** In a typical image only a handful of the 98 box slots hold an object. Their confidence errors would swamp the gradient and push all confidences to zero. So the "no object" term is scaled down with $\lambda_{\text{noobj}} = 0.5$.
-2. **Localisation needs more weight.** Coordinate errors are scaled up with $\lambda_{\text{coord}} = 5$, so the network does not trade box quality for classification.
-3. **Big and small boxes are not equal.** A 10-pixel error is a disaster for a 20-pixel box and nothing for a 400-pixel one. Taking the square root of $w$ and $h$ before the squared error makes the same absolute error cost more for small boxes.
+1. **Empty cells are the vast majority.** In a normal image only a few of the 98 box slots hold an object. Their confidence errors would drown out everything else and push all confidences to zero. So the "no object" term is turned down with $\lambda_{\text{noobj}} = 0.5$.
+2. **Box position needs more weight.** Coordinate errors are turned up with $\lambda_{\text{coord}} = 5$, so the network doesn't give up box quality for classification.
+3. **Big and small boxes aren't the same.** A 10-pixel error is a disaster for a 20-pixel box and nothing for a 400-pixel one. Taking the square root of $w$ and $h$ before the squared error makes the same error in pixels cost more for small boxes.
 
-In code, the square root of a raw network output needs care: early in training $w$ can be negative. A common trick is $\text{sign}(w)\sqrt{|w| + \epsilon}$, which keeps the gradient finite and the sign intact. Many implementations, including the one I followed, also use 1 instead of the IoU as the confidence target. That is a simplification of the paper, and it works fine in practice.
+In code, the square root of a raw network output needs care, because early in training $w$ can be negative. A common trick is $\text{sign}(w)\sqrt{|w| + \epsilon}$, which keeps the gradient finite and the sign the same. Many implementations, including the one I followed, also use 1 instead of the IoU as the confidence target. That's a simplification of the paper, and it works fine in practice.
 
-## From grid to boxes at inference
+## Turning the grid back into boxes
 
-At test time each cell gives $B$ boxes. A box's class-specific score is its confidence times the cell's class probability. Converting back to image coordinates just reverses the encoding:
+At test time each cell gives $B$ boxes. A box's score for a class is its confidence times the cell's class probability. Getting back to image coordinates is just the encoding in reverse:
 
 ```python
 def decode(pred, S=7, C=20, B=2):
@@ -119,22 +119,22 @@ torch.manual_seed(0)
 print(len(decode(torch.rand(S, S, C + 5*B))))   # 98 candidate boxes
 ```
 
-That gives $7 \times 7 \times 2 = 98$ candidates. Low-score boxes are thrown away, and non-maximum suppression removes duplicates where neighbouring cells both found the same large object. Detections are then scored with mean average precision (see [mAP](/notes/mean-average-precision/)).
+That gives $7 \times 7 \times 2 = 98$ candidates. Low-score boxes are thrown away, and non-maximum suppression (NMS) removes duplicates, for example when neighbouring cells both found the same large object. The final detections are then scored with mean average precision (see [mAP](/notes/mean-average-precision/)).
 
-## Strengths and limits
+## What it's good at, and where it struggles
 
-YOLOv1 was very fast and made fewer background false positives than R-CNN, because it sees the whole image as context. Its weaknesses all come from the coarse grid:
+YOLOv1 was very fast, and it made fewer background false positives than R-CNN, because it sees the whole image as context. Its weak spots all come from the coarse grid:
 
-- **Crowds of small objects.** Each cell can predict at most $B$ boxes and only one class. A flock of birds in one cell is mostly lost.
-- **Coarse localisation.** Boxes are regressed from a 7×7 grid after many downsampling steps, so they are less precise than two-stage detectors.
-- **Unusual aspect ratios.** Box shapes are learned from scratch, with no prior. YOLOv2 fixed this by adding anchor boxes (see [anchors](/notes/anchors-and-region-proposal-networks/) and [designing anchors](/notes/designing-anchors-for-your-dataset/)), and YOLOv3 added predictions at three scales.
+- **Crowds of small objects.** Each cell can predict at most $B$ boxes and only one class. A flock of birds in one cell mostly gets lost.
+- **Rough box positions.** Boxes are predicted from a 7×7 grid after a lot of downsampling, so they're less precise than two-stage detectors.
+- **Odd aspect ratios.** Box shapes are learned from scratch, with no starting guess. YOLOv2 fixed this by adding anchor boxes (see [anchors](/notes/anchors-and-region-proposal-networks/) and [designing anchors](/notes/designing-anchors-for-your-dataset/)), and YOLOv3 added predictions at three scales.
 
 ## Key takeaways
 
-- YOLOv1 treats detection as filling one $S \times S \times (5B + C)$ tensor in a single forward pass.
-- The cell that contains an object's centre is responsible for it; box centres are encoded relative to that cell, sizes relative to the image.
-- The loss is plain squared error with three fixes: down-weight empty cells, up-weight coordinates, and take $\sqrt{w}, \sqrt{h}$ so small boxes matter.
-- The grid limits it to a few objects per cell, which hurts on small, crowded objects; anchors and multi-scale heads in later versions address this.
+- YOLOv1 does detection by filling one $S \times S \times (5B + C)$ tensor in a single forward pass.
+- The cell that holds an object's centre is responsible for it. Box centres are stored relative to that cell, sizes relative to the image.
+- The loss is plain squared error with three fixes: turn down empty cells, turn up coordinates, and use $\sqrt{w}, \sqrt{h}$ so small boxes count.
+- The grid only allows a few objects per cell, which hurts with small, crowded objects. Anchors and multi-scale heads in later versions deal with this.
 
 ## Resources
 

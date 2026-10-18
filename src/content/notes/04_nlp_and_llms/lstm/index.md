@@ -4,7 +4,7 @@ slug: lstm
 date: 2025-03-07
 topic: NLP & LLMs
 tags: [lstm, rnn, gates, vanishing-gradients, sequence-models, pytorch, perplexity]
-summary: "How an LSTM cell uses forget, input and output gates around an additive cell state to keep information (and gradients) alive over long sequences, and how to use nn.LSTM correctly for character-level text."
+summary: "How an LSTM uses forget, input and output gates around a cell state that is updated by addition, so information (and gradients) survive long sequences, and how to use nn.LSTM properly for character-level text."
 sources:
   - title: "Long Short-Term Memory"
     author: "Sepp Hochreiter, Jürgen Schmidhuber (Neural Computation, 1997)"
@@ -27,20 +27,20 @@ sources:
 status: draft
 ---
 
-A plain RNN squeezes its whole memory through a tanh and a weight matrix at every step, so gradients fade (or blow up) after a few dozen steps. In a sentence like "The cat, which was very old and grey, sat on the mat", the model has to carry "cat" across the clause to get "sat" right. The Long Short-Term Memory (LSTM) cell, introduced in 1997, solves this with a separate memory track and learned gates that decide what to keep, what to add and what to show.
+A plain RNN pushes its whole memory through a tanh and a weight matrix at every step. So after a few dozen steps the gradients fade away (or blow up). Take a sentence like "The cat, which was very old and grey, sat on the mat". To get "sat" right, the model has to carry "cat" across that whole middle part. The Long Short-Term Memory (LSTM) cell, from 1997, fixes this with a separate memory track and learned gates that decide what to keep, what to add and what to show.
 
 ## Two states instead of one
 
-An LSTM passes two vectors from step to step:
+An LSTM passes two vectors from one step to the next:
 
-- the **cell state** $c_t$, a long-term memory that is changed only by element-wise multiplication and addition;
+- the **cell state** $c_t$, a long-term memory that only gets changed by element-wise multiplication and addition;
 - the **hidden state** $h_t$, the short-term output that the next layer (and the next time step) reads.
 
-Three **gates** control the flow. Each gate is a sigmoid layer, so its outputs lie between 0 (block) and 1 (let through), one value per memory unit.
+Three **gates** control what flows where. The way I think about a gate: it's a sigmoid layer, so each output is between 0 (block) and 1 (let through), one value per memory unit. Like a row of dimmer switches.
 
 ## The equations
 
-Let $[h_{t-1}, x_t]$ be the previous hidden state concatenated with the current input, $\sigma$ the sigmoid and $\odot$ element-wise multiplication.
+Here $[h_{t-1}, x_t]$ is the previous hidden state glued to the current input, $\sigma$ is the sigmoid and $\odot$ is element-wise multiplication.
 
 $$
 \begin{aligned}
@@ -53,9 +53,9 @@ h_t &= o_t \odot \tanh(c_t) && \text{new hidden state}
 \end{aligned}
 $$
 
-Each $W$ has shape (hidden, hidden + input). An LSTM therefore has four times the parameters of a plain RNN with the same hidden size.
+Each $W$ has shape (hidden, hidden + input). So an LSTM has four times the parameters of a plain RNN with the same hidden size.
 
-In the example sentence, the forget gate can stay close to 1 on the units that store "the subject is singular and is a cat" while the clause is read, the input gate can stay closed for the unimportant words, and the output gate can expose that information when the verb arrives. These roles are not programmed; the gates learn them from data.
+Back to the example sentence. While the middle part is read, the forget gate can stay close to 1 on the units that store "the subject is one cat". The input gate can stay closed for the unimportant words. And the output gate can let that information out when the verb comes. Nobody programs these roles, though. The gates learn them from data.
 
 ```python
 import numpy as np
@@ -76,21 +76,21 @@ def lstm_step(x, h_prev, c_prev, P):
 
 ## Why the cell state fixes vanishing gradients
 
-Look at how the gradient flows back along the cell state. Since $c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t$, the direct path gives
+This is the part that made LSTMs click for me. Look at how the gradient flows back along the cell state. Since $c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t$, the direct path gives
 
 $$
 \frac{\partial c_t}{\partial c_{t-1}} = \operatorname{diag}(f_t) \quad (\text{plus smaller terms through the gates}).
 $$
 
-There is no repeated multiplication by a weight matrix and no squashing tanh on this path, only the forget gate. When the network wants to remember, it learns $f_t \approx 1$, and the gradient passes back almost unchanged over many steps. This additive "highway" is the same idea that later reappears as residual connections in ResNets and transformers.
+On this path there's no weight matrix multiplied again and again, and no tanh squashing things. Only the forget gate. When the network wants to remember, it learns $f_t \approx 1$, and the gradient flows back almost unchanged over many steps. So basically the cell state is a "highway" built from addition. The same idea shows up later as residual connections in ResNets and transformers.
 
-A common practical trick is to initialize the forget-gate bias to a positive value (for example 1), so the cell starts out remembering by default.
+A common trick is to start the forget-gate bias at a positive value (for example 1), so the cell remembers by default at the start of training.
 
-The **GRU** (gated recurrent unit) is a lighter variant with two gates and no separate cell state. It often performs similarly with fewer parameters.
+The **GRU** (gated recurrent unit) is a lighter version with two gates and no separate cell state. It often works about as well with fewer parameters.
 
 ## Using `nn.LSTM` in PyTorch
 
-`nn.LSTM` handles the gates and the loop over time. The main difference from `nn.RNN` is that the state is a **tuple** `(h, c)`, each of shape (num_layers, batch, hidden).
+`nn.LSTM` takes care of the gates and the loop over time. The main difference from `nn.RNN` is that the state is a **tuple** `(h, c)`, each of shape (num_layers, batch, hidden).
 
 ```python
 import torch, torch.nn as nn
@@ -109,7 +109,7 @@ class CharLSTM(nn.Module):
         return self.head(self.drop(out)), state   # (B, T, vocab)
 ```
 
-The `dropout` argument of `nn.LSTM` applies between stacked layers only, which is why it is set to 0 for a single layer. Training follows the usual pattern, with gradient clipping:
+The `dropout` argument of `nn.LSTM` only works between stacked layers, which is why it's set to 0 when there's just one layer. Training is the usual loop, plus gradient clipping (capping how big the gradients can get):
 
 ```python
 for x, y in loader:                          # shuffled windows of 25 characters
@@ -123,29 +123,29 @@ for x, y in loader:                          # shuffled windows of 25 characters
 
 ## Two mistakes I made with the state
 
-**Carrying the state across shuffled batches.** My first training loop passed the `(h, c)` from one batch into the next, after detaching it. That is the right thing for truncated backpropagation through time when consecutive batches continue the same text. With a shuffled `DataLoader` of independent windows, though, batch $k+1$ has nothing to do with batch $k$, so the carried state is just noise from unrelated text. It also crashes when the last batch is smaller than the others, because the state has the wrong batch size. For shuffled windows, start every batch from a zero state (pass `None`). For contiguous chunks of one long text, carry the state and detach both tensors: `state = tuple(s.detach() for s in state)`.
+**Carrying the state across shuffled batches.** My first training loop passed the `(h, c)` from one batch into the next, after detaching it. That's the right thing to do for truncated backpropagation through time, when each batch continues the text of the previous one. But with a shuffled `DataLoader` of independent windows, batch $k+1$ has nothing to do with batch $k$. So the carried state is just noise from some unrelated bit of text. It also crashes when the last batch is smaller than the others, because the state has the wrong batch size. For shuffled windows, start every batch from a zero state (pass `None`). For back-to-back chunks of one long text, carry the state and detach both tensors: `state = tuple(s.detach() for s in state)`.
 
-**Validating on training data.** I created a "validation" split with `random_split` from the same windows the model had trained on. Overlapping windows of the same story share almost all their characters, so the validation loss looked excellent but said little. A proper split holds out a separate part of the text before creating any windows.
+**Validating on training data.** I made a "validation" split with `random_split` from the same windows the model trained on. Overlapping windows from the same story share almost all their characters, so the validation loss looked great but didn't really mean anything. A proper split sets aside a separate part of the text before making any windows.
 
 ## How well does it do?
 
-On the one-sentence toy text "The cat sat on the mat and purred." a 16-unit LSTM drove the training loss to almost zero within 200 epochs and, seeded with "c", produced "cat on the mat and purrrrrrrrrr". It memorized the sentence perfectly and then got stuck repeating the last letter, since nothing in training ever followed "purr". On the longer Red Riding Hood story I used the 2-layer, 128-unit model above with dropout 0.3, gradient clipping and temperature sampling at 0.5, 1.0 and 1.5. With a text that small, any LSTM will mostly memorize; a fair comparison with the plain RNN needs a larger corpus and a held-out split.
+On the one-sentence toy text "The cat sat on the mat and purred." a 16-unit LSTM pushed the training loss to almost zero within 200 epochs. Started with "c", it wrote "cat on the mat and purrrrrrrrrr". It learned the sentence by heart and then got stuck repeating the last letter, since nothing in training ever came after "purr". On the longer Red Riding Hood story I used the 2-layer, 128-unit model above with dropout 0.3, gradient clipping and temperature sampling at 0.5, 1.0 and 1.5. With a text that small, any LSTM will mostly memorize. A fair comparison with the plain RNN needs more text and a held-out split.
 
-A common way to report language-model quality is **perplexity**, the exponential of the average cross-entropy:
+A common way to say how good a language model is: **perplexity**, the exponential of the average cross-entropy:
 
 $$
 \text{PPL} = \exp\Big(-\frac{1}{N}\sum_{t=1}^{N} \log p(x_t \mid x_{<t})\Big).
 $$
 
-It can be read as the effective number of equally likely choices the model hesitates between at each step. A perplexity of 1 means certainty; a uniform guess over 42 characters gives 42.
+The easy way to read it: roughly how many equally likely options the model is torn between at each step. A perplexity of 1 means it's certain. A pure random guess over 42 characters gives 42.
 
 ## Key takeaways
 
-- An LSTM keeps a cell state $c_t$ that is updated additively, plus a hidden state $h_t$ that is exposed to the rest of the network.
-- Forget, input and output gates are sigmoid layers that learn what to erase, what to write and what to show.
-- The additive cell update gives gradients a path without repeated matrix products, which avoids vanishing gradients when $f_t \approx 1$.
+- An LSTM keeps a cell state $c_t$ that's updated by addition, plus a hidden state $h_t$ that the rest of the network sees.
+- The forget, input and output gates are sigmoid layers that learn what to erase, what to write and what to show.
+- Because the cell update is additive, gradients get a path with no repeated matrix products. That stops them vanishing when $f_t \approx 1$.
 - In PyTorch the LSTM state is a tuple `(h, c)`. Only carry it between batches that continue the same text, and detach it when you do.
-- Perplexity, $\exp(\text{cross-entropy})$, is the standard way to report how well a language model predicts text.
+- Perplexity, $\exp(\text{cross-entropy})$, is the usual way to report how well a language model predicts text.
 
 ## Resources
 

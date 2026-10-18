@@ -4,7 +4,7 @@ slug: overlap-based-losses
 date: 2024-11-28
 topic: Deep Learning Foundations
 tags: [loss-functions, iou, giou, diou, ciou, dice, tversky, object-detection, segmentation]
-summary: "How losses built on overlap measure what detection and segmentation are actually judged on, and how each IoU variant fixes a weakness of the one before it."
+summary: "How overlap losses train boxes and masks on the same thing they're scored on, and how each IoU variant fixes a problem with the one before it."
 sources:
   - title: "Generalized Intersection over Union: A Metric and A Loss for Bounding Box Regression"
     author: "Hamid Rezatofighi et al."
@@ -27,9 +27,9 @@ sources:
 status: draft
 ---
 
-Detection and segmentation models are judged on overlap: does the predicted box or mask cover the same region as the ground truth? Yet classic training losses look at something else, such as per-coordinate L1/L2 errors or per-pixel cross-entropy. Overlap-based losses close that gap by optimizing the overlap itself. This note walks through the IoU family for boxes, then Dice and Tversky for masks.
+Detection and segmentation models get scored on overlap: does the predicted box or mask cover the same area as the ground truth? But the classic training losses look at something else, like L1/L2 errors on each coordinate or cross-entropy on each pixel. Overlap-based losses close that gap by training on the overlap itself. Here I go through the IoU family for boxes first, then Dice and Tversky for masks.
 
-## IoU and its blind spot
+## IoU and where it falls short
 
 For a predicted region $A$ and a ground-truth region $B$, Intersection over Union is
 
@@ -37,33 +37,33 @@ $$
 \text{IoU} = \frac{|A \cap B|}{|A \cup B|},
 $$
 
-where $|\cdot|$ is area (or pixel count). It is 1 for a perfect match and 0 for no overlap. It does not depend on scale: a 5-pixel error matters much more on a small box than on a large one, which is exactly how detection is evaluated. The natural loss is $\mathcal{L}_{\text{IoU}} = 1 - \text{IoU}$.
+where $|\cdot|$ means area (or pixel count). It's 1 for a perfect match and 0 for no overlap. It also doesn't care about scale: a 5-pixel error matters much more on a small box than on a big one, which is exactly how detection is scored. The obvious loss is $\mathcal{L}_{\text{IoU}} = 1 - \text{IoU}$.
 
-The blind spot: when the boxes do not overlap, IoU is 0 no matter how far apart they are. The loss is flat, so its gradient is zero and gives no hint which way to move the box. Early in training this is common.
+The catch: when the boxes don't overlap at all, IoU is 0 no matter how far apart they are. The loss is flat, so the gradient is zero and tells the model nothing about which way to move the box. And early in training, that happens a lot.
 
-## GIoU: add the empty space of the enclosing box
+## GIoU: count the empty space in the enclosing box
 
-Generalized IoU (Rezatofighi et al., 2019) uses $C$, the smallest box that encloses both $A$ and $B$:
+Generalized IoU (Rezatofighi et al., 2019) uses $C$, the smallest box that contains both $A$ and $B$:
 
 $$
 \text{GIoU} = \text{IoU} - \frac{|C| - |A \cup B|}{|C|}.
 $$
 
-The second term is the share of $C$ that neither box covers. When the boxes are far apart, $C$ is mostly empty and GIoU approaches $-1$. As they move closer the penalty shrinks, so there is a useful gradient even with zero overlap. GIoU lies in $(-1, 1]$, and the loss is $1 - \text{GIoU}$.
+The second term is the part of $C$ that neither box covers. When the boxes are far apart, $C$ is mostly empty and GIoU gets close to $-1$. As they move closer the penalty shrinks, so there's a useful gradient even with zero overlap. GIoU lies in $(-1, 1]$, and the loss is $1 - \text{GIoU}$.
 
 ## DIoU: pull the centres together directly
 
-GIoU tends to first grow the predicted box until it touches the target, then shrink it, which is slow. Distance-IoU (Zheng et al., 2020) penalizes the distance between centres instead:
+GIoU tends to first grow the predicted box until it touches the target, then shrink it again, which is slow. Distance-IoU (Zheng et al., 2020) just penalizes the distance between the centres instead:
 
 $$
 \text{DIoU} = \text{IoU} - \frac{\rho^2(\mathbf{b}, \mathbf{b}^{gt})}{c^2},
 $$
 
-where $\rho$ is the Euclidean distance between the two box centres and $c$ is the diagonal length of the enclosing box $C$. Dividing by $c^2$ keeps the term between 0 and 1 and makes it scale-invariant.
+where $\rho$ is the straight-line distance between the two box centres and $c$ is the diagonal of the enclosing box $C$. Dividing by $c^2$ keeps the term between 0 and 1 and makes it independent of scale.
 
-## CIoU: also match the shape
+## CIoU: match the shape too
 
-Complete IoU (same paper) adds an aspect-ratio term:
+Complete IoU (same paper) adds a term for the aspect ratio (width vs. height):
 
 $$
 \text{CIoU} = \text{DIoU} - \alpha v, \qquad
@@ -71,7 +71,7 @@ v = \frac{4}{\pi^2}\Big(\arctan\frac{w^{gt}}{h^{gt}} - \arctan\frac{w}{h}\Big)^2
 \alpha = \frac{v}{(1 - \text{IoU}) + v}.
 $$
 
-Here $w, h$ are the width and height of the predicted box and $w^{gt}, h^{gt}$ those of the ground truth. $v$ is 0 when the aspect ratios match. Note that $\alpha$ is not a free constant: it is computed from IoU and $v$, so the shape term matters more once the boxes already overlap well. My original notebook used a fixed $\alpha = 0.5$, which is not the published definition. CIoU loss is the default box loss in several YOLO versions.
+Here $w, h$ are the width and height of the predicted box and $w^{gt}, h^{gt}$ are those of the ground truth. $v$ is 0 when the aspect ratios match. One thing I got wrong at first: $\alpha$ isn't a constant you pick. It's computed from IoU and $v$, so the shape term matters more once the boxes already overlap well. My original notebook used a fixed $\alpha = 0.5$, which isn't the published definition. CIoU loss is the default box loss in several YOLO versions.
 
 ```python
 import math
@@ -98,39 +98,39 @@ print(box_ious((0, 0, 1, 1), (1.5, 1.5, 2, 2)))              # 0.0, -0.688, -0.3
 
 ![Two 100 by 100 squares offset by 50 pixels in x and y: IoU 0.1429, GIoU -0.0794, DIoU 0.0317, CIoU 0.0317](fig-overlapping-boxes.png)
 
-For the two offset squares, the union is 17,500 and the enclosing box is 22,500, so GIoU subtracts $5{,}000/22{,}500 \approx 0.22$ from IoU. Both are squares, so $v = 0$ and CIoU equals DIoU.
+For the two offset squares, the union is 17,500 and the enclosing box is 22,500, so GIoU subtracts $5{,}000/22{,}500 \approx 0.22$ from IoU. Both are squares, so $v = 0$ and CIoU is the same as DIoU.
 
 ![A unit square at the origin and a small square near (1.75, 1.75) that do not overlap: IoU 0, GIoU -0.6875, DIoU -0.3906, CIoU -0.3906](fig-disjoint-boxes.png)
 
-For the disjoint pair, IoU is stuck at 0, while GIoU and DIoU are negative and would grow as the boxes approach. That is exactly the signal plain IoU loss lacks.
+For the pair that doesn't overlap, IoU is stuck at 0, while GIoU and DIoU are negative and would go up as the boxes get closer. That's exactly the signal plain IoU loss is missing.
 
-## Dice and Tversky for segmentation masks
+## Dice and Tversky for masks
 
-For masks, the same overlap idea is computed over pixels. With a ground-truth mask $y_i \in \{0,1\}$ and predicted probabilities $p_i \in [0,1]$, the "soft" counts are
+For masks it's the same overlap idea, just counted over pixels. With a ground-truth mask $y_i \in \{0,1\}$ and predicted probabilities $p_i \in [0,1]$, the "soft" counts are
 
 $$
 TP = \sum_i p_i y_i, \qquad FP = \sum_i p_i (1 - y_i), \qquad FN = \sum_i (1 - p_i) y_i .
 $$
 
-Using probabilities instead of thresholded masks keeps everything differentiable.
+TP, FP and FN are true positives, false positives and false negatives. Using probabilities instead of a thresholded 0/1 mask keeps everything differentiable, so you can train on it.
 
 **Soft Jaccard (IoU)**: $J = TP / (TP + FP + FN)$, loss $1 - J$.
 
-**Dice** (the F1 score of the mask):
+**Dice** (basically the F1 score of the mask):
 
 $$
 \text{Dice} = \frac{2\,TP}{2\,TP + FP + FN} = \frac{2|A\cap B|}{|A| + |B|}.
 $$
 
-Dice and Jaccard rank predictions the same way ($\text{Dice} = 2J/(1+J)$), but Dice gives a larger value for the same partial overlap. Both are popular for medical and aerial segmentation, where the foreground may be a tiny fraction of the image. Pixel-wise cross-entropy would be dominated by the background there, while Dice only looks at the foreground.
+Dice and Jaccard rank predictions the same way ($\text{Dice} = 2J/(1+J)$), but Dice gives a higher number for the same partial overlap. Both are popular for medical and aerial segmentation, where the foreground can be a tiny part of the image. There, pixel-wise cross-entropy gets dominated by the background, while Dice only looks at the foreground.
 
-**Tversky** generalizes Dice by weighting the two error types separately:
+**Tversky** extends Dice by weighting the two kinds of error separately:
 
 $$
 \text{TI} = \frac{TP}{TP + \alpha\,FP + \beta\,FN}.
 $$
 
-With $\alpha = \beta = 0.5$ it is Dice; with $\alpha = \beta = 1$ it is Jaccard. Setting $\beta > \alpha$ (for example $\alpha = 0.3$, $\beta = 0.7$) penalizes missed foreground more than false alarms, which improves recall on small structures.
+With $\alpha = \beta = 0.5$ it's Dice, and with $\alpha = \beta = 1$ it's Jaccard. Setting $\beta > \alpha$ (for example $\alpha = 0.3$, $\beta = 0.7$) punishes missed foreground more than false alarms, which helps recall on small structures.
 
 ```python
 import numpy as np
@@ -148,14 +148,14 @@ p = np.array([[0.8, 0.1, 0.6], [0.2, 0.7, 0.3]])
 print(overlap_losses(y, p))   # about (0.417, 0.263, 0.278)
 ```
 
-The small `smooth` term avoids $0/0$ on empty masks. In practice these losses are often added to cross-entropy or focal loss. The pixel-wise term gives stable gradients early in training, and the overlap term matches the evaluation metric.
+The small `smooth` term avoids $0/0$ on empty masks. In practice these losses are often added to cross-entropy or focal loss. The pixel-wise term gives steady gradients early in training, and the overlap term matches how the model is scored.
 
 ## Key takeaways
 
-- Overlap losses optimize the same quantity that detection and segmentation are evaluated on, and they are scale-invariant.
-- Plain IoU loss has zero gradient for non-overlapping boxes; GIoU fixes this with the enclosing box.
-- DIoU adds a normalized centre-distance penalty for faster convergence; CIoU adds an aspect-ratio term whose weight $\alpha$ is computed, not fixed.
-- Dice and Jaccard work on soft pixel counts and handle tiny foregrounds well; Tversky weights false positives and false negatives separately.
+- Overlap losses train on the same thing detection and segmentation are scored on, and they don't depend on object size.
+- Plain IoU loss has zero gradient when boxes don't overlap. GIoU fixes this with the enclosing box.
+- DIoU adds a centre-distance penalty so boxes move into place faster. CIoU adds an aspect-ratio term whose weight $\alpha$ is computed, not fixed.
+- Dice and Jaccard work on soft pixel counts and handle tiny foregrounds well. Tversky weights false positives and false negatives separately.
 
 ## Resources
 

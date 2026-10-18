@@ -4,7 +4,7 @@ slug: wavenet-hierarchical-model
 date: 2024-12-27
 topic: NLP & LLMs
 tags: [language-model, wavenet, hierarchical, batchnorm, tensor-shapes, makemore, pytorch]
-summary: "How to turn a flat MLP language model into a hierarchical one that merges neighbouring characters two at a time, why that works better for the same number of parameters, and the batch-norm shape bug that comes with 3D activations."
+summary: "How a flat MLP language model becomes a tree-shaped one that merges neighbouring characters two at a time, why that helps at the same size, and the batch-norm shape bug that comes with 3D tensors."
 sources:
   - title: "Building makemore Part 5: Building a WaveNet"
     author: "Andrej Karpathy (Neural Networks: Zero to Hero)"
@@ -19,7 +19,7 @@ sources:
 status: draft
 ---
 
-The MLP language model concatenates all context characters and squeezes them through one hidden layer in a single step. With a longer context that is wasteful: eight characters of information get crushed together immediately. WaveNet, a 2016 model for raw audio, combines inputs gradually in a tree: neighbours first, then pairs of pairs, and so on. This note builds that idea for character-level names and tidies the code into small PyTorch-like modules along the way.
+The MLP language model glues all the context characters together and pushes them through one hidden layer in a single step. With a longer context that feels wasteful: eight characters of information get squashed together right away. WaveNet, a 2016 model for raw audio, mixes inputs bit by bit in a tree instead: neighbours first, then pairs of pairs, and so on. Here I build that idea for character-level names, and clean up the code into small PyTorch-like modules along the way.
 
 ## From a flat MLP to a tree
 
@@ -38,19 +38,19 @@ The hierarchical model instead merges two neighbours at a time:
            -> Linear -> (B, 27)
 ```
 
-Each level sees a slightly larger piece of the context and builds a richer summary of it. The final layer gets a summary of all eight characters that was built step by step, not in one jump.
+The way I picture it: each level looks at a slightly bigger piece of the context and makes a better summary of it. So the last layer gets a summary of all eight characters that was built up step by step, not in one jump.
 
 ## Two tensor tricks that make it easy
 
-**Matrix multiplication broadcasts over leading dimensions.** A linear layer only acts on the last dimension:
+**Matrix multiplication only touches the last dimension.** A linear layer works on the last dimension and just repeats itself over all the ones in front:
 
 ```python
 (torch.randn(4, 5, 6, 80) @ torch.randn(80, 200)).shape   # (4, 5, 6, 200)
 ```
 
-So a `Linear` layer applied to a (B, 4, 20) tensor processes the 4 pairs in parallel, with the same weights for every pair.
+So a `Linear` layer on a (B, 4, 20) tensor handles the 4 pairs in parallel, with the same weights for every pair.
 
-**`view` can group neighbours.** For a (B, 8, 10) tensor in contiguous memory, `x.view(B, 4, 20)` places characters 0 and 1 side by side, then 2 and 3, and so on. It is exactly the same as concatenating the even and odd positions:
+**`view` can group neighbours.** For a (B, 8, 10) tensor stored in one block of memory, `x.view(B, 4, 20)` puts characters 0 and 1 side by side, then 2 and 3, and so on. I didn't believe this at first, so I checked it: it's exactly the same as concatenating the even and odd positions:
 
 ```python
 e = torch.randn(4, 8, 10)
@@ -58,7 +58,7 @@ explicit = torch.cat([e[:, ::2, :], e[:, 1::2, :]], dim=2)
 print((e.view(4, 4, 20) == explicit).all())   # tensor(True)
 ```
 
-That gives a tiny layer:
+With that, the merge layer is tiny:
 
 ```python
 class FlattenConsecutive:
@@ -75,9 +75,9 @@ class FlattenConsecutive:
         return []
 ```
 
-## Organizing the code like `torch.nn`
+## Tidying the code to look like `torch.nn`
 
-Up to this point the MLP was a pile of loose tensors. I rewrote it as small classes with the same interface as PyTorch modules: `Embedding`, `FlattenConsecutive`, `Linear`, `BatchNorm1d`, `Tanh` and a `Sequential` container, each with a `__call__` for the forward pass and a `parameters()` method. The whole model then reads like its diagram:
+Until now the MLP was a pile of loose tensors. I rewrote it as small classes that work like PyTorch modules: `Embedding`, `FlattenConsecutive`, `Linear`, `BatchNorm1d`, `Tanh` and a `Sequential` container. Each one has a `__call__` for the forward pass and a `parameters()` method. After that, the whole model reads just like its diagram:
 
 ```python
 n_embd, n_hidden = 10, 68
@@ -93,13 +93,13 @@ model = Sequential([
 ])
 ```
 
-The linear layers before batch norm have no bias, because batch norm subtracts the mean and has its own learned shift. The hidden width of 68 was chosen so the model has about 22,400 parameters, roughly the same as the flat model with 200 hidden units (about 22,100). That keeps the comparison fair.
+The linear layers before batch norm have no bias. Batch norm subtracts the mean anyway and has its own learned shift, so a bias there would do nothing. The hidden width of 68 is picked so the model has about 22,400 parameters, roughly the same as the flat model with 200 hidden units (about 22,100). That way the comparison is fair.
 
-## The batch-norm bug that 3D inputs create
+## The batch-norm bug that 3D inputs cause
 
-My `BatchNorm1d` computed statistics with `x.mean(0)` and `x.var(0)`. That is correct for 2D input of shape (B, C). With the hierarchical model the input to the first batch-norm layer is (B, 4, 68). Reducing only over dimension 0 gives statistics of shape (1, 4, 68): a separate mean and variance for each of the 4 pair positions. Nothing crashes, because broadcasting makes the shapes work. But each statistic is estimated from fewer numbers, and the running averages end up with the wrong shape.
+This was the sneaky part. My `BatchNorm1d` computed its statistics with `x.mean(0)` and `x.var(0)`. That's right for 2D input of shape (B, C). But in the tree model, the first batch-norm layer gets (B, 4, 68). Averaging only over dimension 0 gives statistics of shape (1, 4, 68): a separate mean and variance for each of the 4 pair positions. Nothing crashes, because broadcasting makes the shapes fit. But each statistic is estimated from fewer numbers, and the running averages end up with the wrong shape.
 
-The 4 positions are just more examples of "a pair of characters", so the statistics should be pooled over both the batch and the position dimension:
+The 4 positions are really just more examples of "a pair of characters". So the statistics should be averaged over both the batch and the position dimension:
 
 ```python
 dim = 0 if x.ndim == 2 else (0, 1)
@@ -107,7 +107,7 @@ xmean = x.mean(dim, keepdim=True)    # (1, 1, 68)
 xvar = x.var(dim, keepdim=True)
 ```
 
-This is what `torch.nn.BatchNorm1d` does for 3D input, except that PyTorch expects the channel dimension in the middle, (B, C, L), not last. Silent shape bugs like this are a good reason to print the output shape of every layer once:
+That's what `torch.nn.BatchNorm1d` does for 3D input too, except PyTorch expects the channel dimension in the middle, (B, C, L), not last. Bugs like this that don't throw any error are a good reason to print the output shape of every layer once:
 
 ```python
 for layer in model.layers:
@@ -122,25 +122,25 @@ Trained for 200,000 steps with batch size 32 and a learning rate of 0.1, dropped
 |---|---|---|---|
 | hierarchical (this note) | 8 | 1.91 | 2.03 |
 
-This is clearly better than the 3-character MLP from the earlier notes, whose validation loss was around 2.1 to 2.25 depending on size and initialization. Part of the gain comes from the longer context and part from the hierarchical structure. Before evaluating, every layer must be switched to evaluation mode (`layer.training = False`) so batch norm uses its running statistics instead of the statistics of the current batch.
+That's clearly better than the 3-character MLP from the earlier notes, whose validation loss was around 2.1 to 2.25 depending on size and initialization. Some of the gain comes from the longer context and some from the tree structure. One thing not to forget: before evaluating, switch every layer to evaluation mode (`layer.training = False`), so batch norm uses its running statistics and not the statistics of the current batch.
 
 ![Training loss (log10 of the cross-entropy, averaged over windows of 1,000 steps) over 200,000 steps. It falls steadily from about 0.39 to 0.30, then drops sharply to about 0.285 when the learning rate is reduced at step 150,000.](fig-wavenet-loss.png)
 
-Averaging the noisy per-batch loss over windows of 1,000 steps makes the curve readable. The step down at 150,000 is the learning-rate decay.
+The per-batch loss is very noisy, so averaging it over windows of 1,000 steps makes the curve readable. The step down at 150,000 is where the learning rate drops.
 
-Samples now look like real names: `lyncia`, `audlyn`, `kimber`, `erisha`, `ella`, `roni`.
+The samples now look like real names: `lyncia`, `audlyn`, `kimber`, `erisha`, `ella`, `roni`.
 
-## How this relates to the real WaveNet
+## How this compares to the real WaveNet
 
-The real WaveNet uses **dilated causal convolutions**. A convolution with kernel size 2 is the same small linear layer slid along the sequence, and dilation makes each level skip further, so the receptive field doubles per layer. My model computes the same tree for a single output position. A convolutional version would compute the outputs for every position in the sequence at once and reuse shared intermediate results, which is much more efficient for training. WaveNet also adds gated activations and residual and skip connections, which are left out here.
+The real WaveNet uses **dilated causal convolutions**. A convolution with kernel size 2 is just the same small linear layer slid along the sequence. Dilation means each level skips further ahead, so the receptive field (how much of the input one output can see) doubles at every layer. My model computes the same tree, but only for one output position. A convolutional version would compute outputs for every position at once and reuse the shared middle results, which is much faster for training. WaveNet also has gated activations and residual and skip connections, which I left out here.
 
 ## Key takeaways
 
-- A hierarchical model fuses context gradually (pairs, then pairs of pairs) instead of flattening everything into one layer.
-- `Linear` layers act on the last dimension and broadcast over all others, and `view` can group neighbouring time steps without copying.
-- With 3D activations, batch norm must reduce over both batch and time dimensions. Broadcasting will hide the mistake if it does not.
-- Wrapping layers in small module classes makes the model readable and makes shape bugs easier to find.
-- At about the same parameter count, the 8-character hierarchical model reached a validation loss of about 2.03.
+- A tree-shaped model mixes context bit by bit (pairs, then pairs of pairs) instead of flattening everything into one layer.
+- `Linear` layers work on the last dimension and repeat over all the others, and `view` can group neighbouring time steps without copying.
+- With 3D activations, batch norm has to average over both the batch and time dimensions. If it doesn't, broadcasting hides the mistake.
+- Wrapping layers in small module classes makes the model easier to read and shape bugs easier to find.
+- At about the same parameter count, the 8-character tree model got a validation loss of about 2.03.
 
 ## Resources
 

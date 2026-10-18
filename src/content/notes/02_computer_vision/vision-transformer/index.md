@@ -4,7 +4,7 @@ slug: vision-transformer
 date: 2025-05-27
 topic: Computer Vision
 tags: [vision-transformer, vit, transformers, patch-embedding, attention, pytorch]
-summary: "How a Vision Transformer cuts an image into patches, turns them into tokens with a class token and positional embeddings, runs them through pre-norm encoder blocks, and why a single batch_first flag can silently break it."
+summary: "How a Vision Transformer cuts an image into patches, turns them into tokens with a class token and positional embeddings, runs them through pre-norm encoder blocks, and how one batch_first flag can quietly break it."
 sources:
   - title: "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
     author: "Alexey Dosovitskiy et al."
@@ -27,13 +27,13 @@ sources:
 status: draft
 ---
 
-A transformer works on a sequence of vectors. An image is a grid of pixels. The Vision Transformer (ViT) joins the two in the simplest possible way: it cuts the image into square patches, turns each patch into one vector, and hands the sequence to a standard transformer encoder. Almost nothing image-specific is left in the model, and that is both its strength and its weakness. Most modern vision backbones, such as [DINOv2](/notes/dinov2-self-supervised-features/), and many segmentation models, such as the ones in [panoptic segmentation](/notes/panoptic-segmentation/), are built on this idea.
+A transformer works on a sequence of vectors. An image is a grid of pixels. The Vision Transformer (ViT) connects the two in the simplest way you could think of: cut the image into square patches, turn each patch into one vector, and give that sequence to a normal transformer encoder. Almost nothing image-specific is left in the model. That's both why it's nice and why it's hard to train. Most modern vision backbones, like [DINOv2](/notes/dinov2-self-supervised-features/), and many segmentation models, like the ones in [panoptic segmentation](/notes/panoptic-segmentation/), are built on this idea.
 
 ## From pixels to tokens: the patch embedding
 
-Take a 224×224 RGB image and a patch size of $P = 16$. The image splits into $224/16 = 14$ patches per side, so $N = 14^2 = 196$ patches. Each patch holds $3 \cdot 16 \cdot 16 = 768$ numbers. ViT flattens each patch and multiplies it by one shared weight matrix $E$ of shape $768 \times D$, where $D$ is the model width. The result is a sequence of 196 tokens, each of length $D$.
+Take a 224×224 RGB image and a patch size of $P = 16$. The image splits into $224/16 = 14$ patches per side, so $N = 14^2 = 196$ patches. Each patch holds $3 \cdot 16 \cdot 16 = 768$ numbers. ViT flattens each patch and multiplies it by one shared weight matrix $E$ of shape $768 \times D$, where $D$ is the model width. What comes out is a sequence of 196 tokens, each of length $D$.
 
-In code this is usually written as a convolution whose kernel size and stride both equal the patch size. The kernel then sees each patch exactly once and never overlaps, so it is the same linear map. The check below copies the conv weights into a linear layer and compares the outputs:
+In code you usually see this written as a convolution whose kernel size and stride are both equal to the patch size. That confused me at first, since it looks like a "real" conv. But the kernel sees each patch exactly once and never overlaps, so it's the same linear map. The check below copies the conv weights into a linear layer and compares the outputs:
 
 ```python
 import torch, torch.nn as nn
@@ -51,27 +51,27 @@ linear.bias.data = conv.bias.data
 print(torch.allclose(linear(patches), tokens, atol=1e-4))   # True
 ```
 
-The `flatten(2).transpose(1, 2)` step matters. The conv gives `(B, D, 14, 14)`; the transformer wants `(B, N, D)`, one row per token.
+Don't skip the `flatten(2).transpose(1, 2)` step. The conv gives `(B, D, 14, 14)`, but the transformer wants `(B, N, D)`: one row per token.
 
 ## Class token and positional embeddings
 
-Two learned extras are added before the encoder.
+Two learned extras get added before the encoder.
 
-**Class token.** A single learned vector, `cls`, is put in front of the sequence, so it has $N+1$ tokens. It carries no image content at the start. Through attention it collects information from all patches, and at the end its output vector is used as the summary of the whole image. This idea comes from BERT. Many later models drop it and simply average all patch outputs (mean pooling); both work about equally well.
+**Class token.** One learned vector, `cls`, is stuck at the front of the sequence, so now there are $N+1$ tokens. At the start it holds no image content. Through attention it gathers information from all the patches, and at the end its output vector is used as the summary of the whole image. The idea comes from BERT. Many later models drop it and just average all the patch outputs (mean pooling). Both work about equally well.
 
-**Positional embeddings.** Attention does not care about order: if you shuffle the tokens, every output is shuffled the same way and nothing else changes. So the model cannot tell the top-left patch from the bottom-right one. ViT fixes this by adding a learned vector to each position, $z_0 = [\,x_\text{cls};\, x_1 E;\, \dots;\, x_N E\,] + E_\text{pos}$, where $E_\text{pos}$ has shape $(N+1) \times D$. The paper found that simple 1D learned embeddings work as well as 2D-aware ones; the model learns the grid layout by itself. A side effect: if you change the input size at test time, $N$ changes and the positional embeddings must be interpolated to the new grid.
+**Positional embeddings.** Attention doesn't care about order. If you shuffle the tokens, every output gets shuffled the same way and nothing else changes. So on its own the model can't tell the top-left patch from the bottom-right one. ViT fixes this by adding a learned vector for each position, $z_0 = [\,x_\text{cls};\, x_1 E;\, \dots;\, x_N E\,] + E_\text{pos}$, where $E_\text{pos}$ has shape $(N+1) \times D$. The paper found that simple 1D learned embeddings work as well as 2D-aware ones. The model figures out the grid layout by itself. One side effect: if you change the input size at test time, $N$ changes, and the positional embeddings have to be interpolated to the new grid.
 
 ## The encoder block
 
-Each block is the usual transformer encoder layer in the **pre-norm** form: LayerNorm comes *before* each sub-layer, and the residual path stays clean.
+Each block is the usual transformer encoder layer in the **pre-norm** form. That just means LayerNorm comes *before* each sub-layer, so the residual path (the skip connection) stays clean.
 
 $$
 x \leftarrow x + \text{MHA}(\text{LN}(x)), \qquad x \leftarrow x + \text{MLP}(\text{LN}(x))
 $$
 
-MHA is [multi-head self-attention](/notes/multi-head-attention/), where every patch can look at every other patch (see [self-attention](/notes/self-attention/) for the query–key–value mechanics). The MLP is two linear layers with a GELU in between, usually 4× wider than $D$. Pre-norm makes deep stacks train more stably than the post-norm layout of the original transformer. A final LayerNorm is applied before the classifier head.
+MHA is [multi-head self-attention](/notes/multi-head-attention/), where every patch can look at every other patch (see [self-attention](/notes/self-attention/) for how queries, keys and values work). The MLP is two linear layers with a GELU in between, usually 4× wider than $D$. Pre-norm makes deep stacks train more stably than the post-norm layout of the original transformer. One last LayerNorm goes before the classifier head.
 
-Putting it all together gives a small but complete ViT:
+Put it all together and you get a small but complete ViT:
 
 ```python
 class Block(nn.Module):                     # pre-norm encoder block
@@ -106,9 +106,9 @@ print(ViT()(torch.randn(2, 3, 224, 224)).shape)   # torch.Size([2, 10])
 
 ## The batch_first trap
 
-When I first wrote this block I used `nn.MultiheadAttention(embed_dim, num_heads)` without any extra flag and fed it a `(B, N, D)` tensor. It ran without errors and the shapes looked right. It was still wrong.
+When I first wrote this block I used `nn.MultiheadAttention(embed_dim, num_heads)` with no extra flag and fed it a `(B, N, D)` tensor. It ran without errors and the shapes looked fine. It was still wrong.
 
-For historical reasons, PyTorch's `MultiheadAttention` defaults to `batch_first=False`, which means it expects `(sequence, batch, features)`. Given `(B, N, D)`, it reads the batch axis as the sequence. Attention then runs across *images* at each patch position: patch 5 of image 0 attends to patch 5 of images 1, 2 and 3, and never to the other patches of its own image. A quick test shows it. Change only image 3 and see whether image 0's output moves:
+For historical reasons, PyTorch's `MultiheadAttention` defaults to `batch_first=False`, which means it expects `(sequence, batch, features)`. Give it `(B, N, D)` and it reads the batch axis as the sequence. So attention runs across *images* at each patch position: patch 5 of image 0 attends to patch 5 of images 1, 2 and 3, and never to the other patches of its own image. A quick test shows it. Change only image 3 and see if image 0's output moves:
 
 ```python
 B, N, D = 4, 10, 64
@@ -123,7 +123,7 @@ for batch_first in (False, True):
 # True  0.0     <- correct
 ```
 
-The fix is `batch_first=True`, as in the code above. The test is worth keeping in any model with attention: samples in a batch must never influence each other at inference time. A related slip in the same first draft was testing the block with an image tensor `(1, 3, 256, 256)` instead of tokens. A block should always be tested with the shape it will really see, `(B, N+1, D)`.
+The fix is `batch_first=True`, like in the code above. I think this test is worth keeping for any model with attention: samples in a batch should never affect each other at inference time. A related slip in the same first draft was testing the block with an image tensor `(1, 3, 256, 256)` instead of tokens. Always test a block with the shape it will really get, `(B, N+1, D)`.
 
 ## Patch size and cost
 
@@ -138,19 +138,19 @@ Self-attention compares every token with every other token, so its cost grows wi
 | 14 | 256 | 65,536 |
 | 8 | 784 | 614,656 |
 
-Smaller patches keep more detail, which matters for dense tasks like segmentation, but memory and time rise quickly. This is why ViT-B/16 and ViT-L/14 are common choices, and why dense-prediction models often use windowed attention or work at a coarse token grid and upsample later.
+Smaller patches keep more detail, which matters for dense tasks like segmentation, but memory and time go up fast. That's why ViT-B/16 and ViT-L/14 are common choices, and why dense-prediction models often use windowed attention, or work on a coarse token grid and upsample later.
 
-## Weak inductive bias: why ViT needs data
+## Weak inductive bias: why ViT needs so much data
 
-A CNN has strong built-in assumptions: nearby pixels matter most (locality), and the same pattern means the same thing anywhere (translation equivariance). ViT has almost none of this. Only the patch cutting and the positional embeddings know about 2D space; every other relation must be learned. The original paper showed the effect clearly: trained on ImageNet-1k alone, ViT did worse than a ResNet of similar size, but after pre-training on 14M to 300M images it matched or beat it. Later work (DeiT) closed much of the gap with strong augmentation, regularisation and distillation, and self-supervised methods such as DINOv2 now give ViTs very good features without labels. In practice: start from pre-trained weights unless you have a very large dataset.
+A CNN comes with strong built-in assumptions (its "inductive bias"): nearby pixels matter most (locality), and the same pattern means the same thing anywhere in the image (translation equivariance). ViT has almost none of that. Only the patch cutting and the positional embeddings know anything about 2D space. Everything else has to be learned. The original paper showed this clearly. Trained on ImageNet-1k alone, ViT did worse than a ResNet of similar size, but after pre-training on 14M to 300M images it matched or beat it. Later work (DeiT) closed much of the gap with strong augmentation, regularisation and distillation, and self-supervised methods like DINOv2 now give ViTs very good features without labels. So basically: start from pre-trained weights unless you have a really big dataset.
 
 ## Key takeaways
 
-- A ViT cuts the image into $P \times P$ patches and maps each one linearly to a $D$-dimensional token; a conv with kernel = stride = $P$ does exactly this.
-- A learned class token collects a global summary, and learned positional embeddings tell the model where each patch came from.
+- A ViT cuts the image into $P \times P$ patches and maps each one linearly to a $D$-dimensional token. A conv with kernel = stride = $P$ does exactly this.
+- A learned class token collects a summary of the whole image, and learned positional embeddings tell the model where each patch came from.
 - Each encoder block is pre-norm: $x + \text{MHA}(\text{LN}(x))$, then $x + \text{MLP}(\text{LN}(x))$.
-- `nn.MultiheadAttention` defaults to `batch_first=False`; feeding it `(B, N, D)` silently mixes images. Test that changing one sample never changes another.
-- Attention cost grows with $N^2$, so the patch size is a direct trade-off between detail and compute; the weak inductive bias means ViTs need large-scale or self-supervised pre-training.
+- `nn.MultiheadAttention` defaults to `batch_first=False`. Feeding it `(B, N, D)` quietly mixes images together. Test that changing one sample never changes another.
+- Attention cost grows with $N^2$, so patch size is a direct trade-off between detail and compute. And because of the weak inductive bias, ViTs need large-scale or self-supervised pre-training.
 
 ## Resources
 

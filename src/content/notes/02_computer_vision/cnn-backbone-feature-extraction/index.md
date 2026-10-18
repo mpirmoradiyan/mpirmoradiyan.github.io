@@ -39,16 +39,16 @@ sources:
 status: draft
 ---
 
-A classifier only needs the last layer of a network. A detector or a segmenter needs much more: it needs feature maps from several depths, so it can find small objects on fine grids and large objects on coarse ones. In practice you almost never write that backbone yourself. You take a pretrained CNN and tap it at the right places. This note shows how I did that for VGG19, VGG19-BN and ResNet-50 with torchvision, and what to check along the way. (The notebook starts with the official PyTorch "Build the Neural Network" tutorial as a warm-up; the experiments below go beyond it.)
+A classifier only cares about the last layer of a network. A detector or a segmenter needs a lot more: feature maps from several depths, so it can find small objects on fine grids and big objects on coarse ones. You almost never write that backbone yourself. You take a pretrained CNN and tap into it at the right spots. These are my notes on doing that for VGG19, VGG19-BN and ResNet-50 with torchvision, and what to check along the way. (The notebook starts with the official PyTorch "Build the Neural Network" tutorial as a warm-up. The experiments below go past it.)
 
 ## Why several depths?
 
-As an image moves through a CNN, two things change at once:
+As an image goes through a CNN, two things happen at the same time:
 
 - **Resolution goes down.** Every pooling layer or stride-2 convolution halves the height and width.
-- **Meaning goes up.** Early layers respond to edges and textures in small neighborhoods. Deep layers cover large parts of the image and respond to object parts and whole objects.
+- **Meaning goes up.** Early layers react to edges and textures in small neighborhoods. Deep layers cover big parts of the image and react to object parts and whole objects.
 
-The amount of downsampling is called the **stride** $s$ of a feature map. For an input of size $H \times W$, a map at stride $s$ has size $\frac{H}{s} \times \frac{W}{s}$. With my 512×512 test input:
+How much a feature map has been shrunk is called its **stride** $s$. For an input of size $H \times W$, a map at stride $s$ has size $\frac{H}{s} \times \frac{W}{s}$. With my 512×512 test input:
 
 | Stride | Map size | What it is good for |
 |---|---|---|
@@ -57,11 +57,11 @@ The amount of downsampling is called the **stride** $s$ of a feature map. For an
 | 16 | 32×32 | medium objects |
 | 32 | 16×16 | large objects, global context |
 
-No single map is good at everything. Feature Pyramid Networks (FPN) fix this by taking the maps at strides 4 to 32 and adding a top-down path that passes the strong semantics of deep maps back to the high-resolution ones. Mask R-CNN, RetinaNet, Panoptic FPN and many segmenters all start from such a set of maps. So the first practical step is always the same: get those maps out of a backbone.
+No single map is good at everything. Feature Pyramid Networks (FPN) deal with this by taking the maps at strides 4 to 32 and adding a top-down path that carries the "meaning" from the deep maps back into the high-resolution ones. Mask R-CNN, RetinaNet, Panoptic FPN and lots of segmenters all start from a set of maps like this. So the first practical step is always the same: get those maps out of a backbone.
 
-## Inspecting a backbone first
+## Look at the backbone first
 
-Before choosing where to tap, look at how the shapes change. `torchsummary` prints every layer's output shape and parameter count:
+Before picking where to tap, look at how the shapes change. `torchsummary` prints every layer's output shape and parameter count:
 
 ```python
 import torch
@@ -73,11 +73,11 @@ model = vgg19().to(device)
 summary(model, input_size=(3, 512, 512), device=device)
 ```
 
-For VGG19 the output shows five blocks of 3×3 convolutions, each ending in a max-pool that halves the size: 512 → 256 → 128 → 64 → 32 → 16. The channel count grows from 64 to 512 along the way.
+For VGG19 you see five blocks of 3×3 convolutions, each ending in a max-pool that halves the size: 512 → 256 → 128 → 64 → 32 → 16. Meanwhile the channel count grows from 64 to 512.
 
 ## `create_feature_extractor`: name the nodes you want
 
-torchvision can trace a model with `torch.fx` and build a new module that returns any intermediate results you ask for, in a dictionary. First list the node names, then pick the ones you need:
+torchvision can trace a model with `torch.fx` and build a new module that hands back any intermediate results you ask for, in a dictionary. First list the node names, then pick the ones you want:
 
 ```python
 from torchvision.models import vgg19, VGG19_Weights
@@ -101,13 +101,13 @@ for name, f in feats.items():
 # stride32 (1, 512, 16, 16)
 ```
 
-The keys of `return_nodes` are the graph node names; the values are whatever names you want in the output dictionary. I first labeled them by spatial size ("64", "32", "16"), but naming them by stride is clearer, because the stride does not change when the input size does.
+The keys of `return_nodes` are the graph node names. The values are whatever names you want in the output dictionary. At first I labeled them by spatial size ("64", "32", "16"), but naming them by stride is clearer, because the stride stays the same when the input size changes.
 
-The extractor only runs the graph up to the deepest requested node, so the classifier layers of VGG are not executed at all.
+The extractor only runs the graph up to the deepest node you asked for, so VGG's classifier layers don't run at all.
 
 ## VGG19-BN: same network, different indices
 
-`vgg19_bn` adds a BatchNorm after every convolution. Each conv now takes three entries in `features` (conv, BN, ReLU) instead of two, so the pooling layers move to indices 26, 39 and 52:
+`vgg19_bn` adds a BatchNorm after every convolution. So each conv now takes three entries in `features` (conv, BN, ReLU) instead of two, and the pooling layers move to indices 26, 39 and 52:
 
 ```python
 from torchvision.models import vgg19_bn
@@ -118,11 +118,11 @@ body = create_feature_extractor(model, return_nodes={
 # same shapes as plain VGG19: (256, 64, 64), (512, 32, 32), (512, 16, 16)
 ```
 
-The lesson: never reuse node indices between model variants. Look them up with `get_graph_node_names` every time.
+Lesson learned: don't reuse node indices between model variants. Look them up with `get_graph_node_names` every time.
 
 ## ResNet-50 and the reused-ReLU trap
 
-For ResNet-50 my first choice was nodes such as `layer3.0.relu` and `layer4.0.relu`. The output was:
+For ResNet-50 I first picked nodes like `layer3.0.relu` and `layer4.0.relu`. The output was:
 
 ```text
 layer3.0.relu    -> (1, 256, 64, 64)
@@ -130,9 +130,9 @@ layer4.0.relu    -> (1, 512, 32, 32)
 layer4.2.relu_2  -> (1, 2048, 16, 16)
 ```
 
-The last one is right, but the first two are not the stage outputs I wanted: stage 3 of ResNet-50 should give 1024 channels at stride 16. The reason is in how torchvision writes a `Bottleneck` block. It defines a single `self.relu` module and **calls it three times** (after each of the three convolutions). FX gives the three calls the names `relu`, `relu_1` and `relu_2`. So `layer3.0.relu` is the activation after the *first* 1×1 convolution of the first block in stage 3. That convolution reduces the channels to 256, and the stride-2 convolution that comes after it has not run yet, so the map is still 64×64.
+The last one is right, but the first two aren't the stage outputs I wanted. Stage 3 of ResNet-50 should give 1024 channels at stride 16. This one confused me for a bit. The reason is how torchvision writes a `Bottleneck` block: it defines one `self.relu` module and **calls it three times** (after each of the three convolutions). FX names the three calls `relu`, `relu_1` and `relu_2`. So `layer3.0.relu` is the activation after the *first* 1×1 convolution of the first block in stage 3. That convolution cuts the channels to 256, and the stride-2 convolution after it hasn't run yet, so the map is still 64×64.
 
-Only `relu_2` of the *last* block of a stage is the true stage output. The simplest and safest choice is to tap the stage modules themselves:
+Only `relu_2` of the *last* block in a stage is the real stage output. The simplest and safest thing is to tap the stage modules themselves:
 
 ```python
 from torchvision.models import resnet50, ResNet50_Weights
@@ -149,11 +149,11 @@ with torch.no_grad():
 # c5 (1, 2048, 16, 16)    stride 32
 ```
 
-The names C2 to C5 follow the FPN paper, where $C_i$ is the output of stage $i$ at stride $2^i$.
+The names C2 to C5 come from the FPN paper, where $C_i$ is the output of stage $i$ at stride $2^i$.
 
-## A quick sanity check for any backbone
+## A quick check for any backbone
 
-After building an extractor, run a dummy input and check that each map has the size you expect:
+After building an extractor, push a dummy input through and check that each map has the size you expect:
 
 ```python
 def check_strides(feats, input_size=512):
@@ -162,20 +162,20 @@ def check_strides(feats, input_size=512):
         print(f"{name:10s} channels={f.shape[1]:5d}  size={f.shape[-1]:4d}  stride={s}")
 ```
 
-If two maps you meant to be different stages share the same stride, or a channel count looks wrong, you have probably tapped a node inside a block rather than at its end.
+If two maps that were supposed to be different stages have the same stride, or a channel count looks off, you've probably tapped a node inside a block instead of at its end.
 
 ## How this connects to real models
 
-- **Segmentation.** `torchvision.models.segmentation.fcn_resnet50` uses exactly this kind of ResNet body, with the last stages modified to keep a higher resolution (dilated convolutions), plus a small convolutional head that predicts a class for every pixel.
+- **Segmentation.** `torchvision.models.segmentation.fcn_resnet50` uses exactly this kind of ResNet body. Its last stages are changed to keep a higher resolution (dilated convolutions), and a small convolutional head on top predicts a class for every pixel.
 - **Detection.** torchvision's detection models wrap a ResNet with a similar "return these layers" mechanism and feed C2–C5 into an FPN.
-- **Your own heads.** Once you have the dictionary of maps, adding an FPN (`torchvision.ops.FeaturePyramidNetwork`) or a U-Net-style decoder is a few lines.
+- **Your own heads.** Once you have the dictionary of maps, adding an FPN (`torchvision.ops.FeaturePyramidNetwork`) or a U-Net-style decoder only takes a few lines.
 
 ## Key takeaways
 
-- Detectors and segmenters need feature maps at several strides (typically 4 to 32), not just the final output.
-- `get_graph_node_names` lists the tappable nodes; `create_feature_extractor` returns the chosen ones as a dictionary.
+- Detectors and segmenters need feature maps at several strides (usually 4 to 32), not just the final output.
+- `get_graph_node_names` lists the nodes you can tap. `create_feature_extractor` gives back the ones you pick as a dictionary.
 - Node indices change between variants (VGG19 vs VGG19-BN), so always look them up.
-- In torchvision ResNets one ReLU module is called three times per block; tap `layer1` to `layer4` for clean stage outputs.
+- In torchvision ResNets one ReLU module gets called three times per block. Tap `layer1` to `layer4` to get clean stage outputs.
 - Always run a dummy input and check channels and strides before building a head on top.
 
 ## Resources

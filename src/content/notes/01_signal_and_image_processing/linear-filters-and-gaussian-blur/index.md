@@ -4,7 +4,7 @@ slug: linear-filters-and-gaussian-blur
 date: 2024-06-04
 topic: Signal & Image Processing
 tags: [convolution, linear-filters, gaussian, blur, image-processing, frequency-domain]
-summary: "What a linear shift-invariant filter is, how convolution applies it, and why the Gaussian is the standard blur kernel."
+summary: "What a linear shift-invariant filter is, how convolution applies it, and why the Gaussian is the go-to blur kernel."
 sources:
   - title: "Foundations of Computer Vision, Chapter 15: Linear Image Filtering"
     author: "Antonio Torralba, Phillip Isola, William T. Freeman"
@@ -19,14 +19,14 @@ sources:
 status: draft
 ---
 
-Blurring, sharpening, edge detection and the first layer of a convolutional network are all the same operation: a linear filter slid across the image. Understanding one filter well, the Gaussian, makes all the others easier. My notebook for this was short (I plotted Gaussian kernels for many widths), so this note fills in the ideas around it, following Chapters 15 and 17 of *Foundations of Computer Vision*.
+Blurring, sharpening, edge detection and the first layer of a convolutional network are all the same thing underneath: a linear filter slid across the image. Once I understood one filter properly, the Gaussian, the others got a lot easier. My notebook for this was short (I just plotted Gaussian kernels for lots of widths), so here I fill in the ideas around it, following Chapters 15 and 17 of *Foundations of Computer Vision*.
 
 ## Linear and shift-invariant
 
-A filter is a function that takes an image $\ell$ and returns an image. Two properties make filters easy to analyse:
+A filter is just a function that takes an image $\ell$ and gives back an image. Two properties make filters easy to reason about:
 
 - **Linear**: filtering $a\ell_1 + b\ell_2$ gives $a$ times the filtered $\ell_1$ plus $b$ times the filtered $\ell_2$.
-- **Shift-invariant**: if you shift the input, the output shifts by the same amount and does not otherwise change. The filter treats every location the same way.
+- **Shift-invariant**: if you shift the input, the output shifts by the same amount and nothing else changes. The filter treats every spot in the image the same way.
 
 Any filter with both properties can be written as a **convolution** with a small array $h$, called the kernel or impulse response:
 
@@ -34,13 +34,13 @@ $$
 (\ell * h)[n, m] = \sum_{k}\sum_{l} \ell[n - k,\, m - l]\; h[k, l].
 $$
 
-In words: each output pixel is a weighted sum of the input pixels around it, with the same weights everywhere. The kernel is what you get out if you feed in a single bright pixel (an impulse), which is why it is called the impulse response.
+So basically: each output pixel is a weighted sum of the input pixels around it, using the same weights everywhere. If you feed in a single bright pixel (an impulse), what comes out is the kernel itself. That's why it's called the impulse response.
 
-Many libraries actually compute **correlation**, $\sum \ell[n + k, m + l]\,h[k, l]$, which is convolution with a flipped kernel. For symmetric kernels such as the Gaussian the two are identical. For derivative kernels like $[-1, 1]$ the sign flips, so check which one your library uses (OpenCV's `filter2D` and SciPy's `correlate` compute correlation; `scipy.ndimage.convolve` computes convolution).
+This tripped me up at first: many libraries actually compute **correlation**, $\sum \ell[n + k, m + l]\,h[k, l]$, which is convolution with the kernel flipped. For symmetric kernels like the Gaussian, there's no difference. For derivative kernels like $[-1, 1]$ the sign flips, so check which one your library does (OpenCV's `filter2D` and SciPy's `correlate` compute correlation; `scipy.ndimage.convolve` computes convolution).
 
-## The box filter and its problem
+## The box filter and what's wrong with it
 
-The simplest blur averages a square neighbourhood: a $5 \times 5$ kernel with every entry $1/25$. It works, but its frequency response is a 2D sinc. The sinc has side lobes, so some high frequencies pass through with flipped sign. In practice this can leave faint ringing and makes the box a poor anti-aliasing filter.
+The simplest blur just averages a square neighbourhood: a $5 \times 5$ kernel with every entry $1/25$. It works, but its frequency response is a 2D sinc. The sinc has side lobes (little bumps on each side), so some high frequencies get through with their sign flipped. In practice this can leave faint ringing, and it makes the box a poor anti-aliasing filter.
 
 ## The Gaussian kernel
 
@@ -50,11 +50,11 @@ $$
 g(x, y; \sigma) = \frac{1}{2\pi\sigma^2}\exp\left(-\frac{x^2 + y^2}{2\sigma^2}\right),
 $$
 
-where $(x, y)$ is the offset from the kernel centre and $\sigma$ (in pixels) sets the width. The factor $1/(2\pi\sigma^2)$ makes the continuous kernel integrate to 1, so blurring does not change the average brightness. For a sampled kernel we simply divide by the sum.
+where $(x, y)$ is the offset from the centre of the kernel and $\sigma$ (in pixels) sets the width. The factor $1/(2\pi\sigma^2)$ makes the continuous kernel add up to 1, so blurring doesn't change the average brightness. For a sampled kernel we just divide by the sum.
 
 ![Top: Gaussian kernels with sigma 1, 2, 4 and 8 pixels. Bottom: the image blurred with each kernel](fig-gaussian-kernels.png)
 
-Bigger $\sigma$ means a wider kernel and a stronger blur. A practical rule is to make the kernel about $6\sigma$ wide (three $\sigma$ on each side), since the Gaussian is almost zero beyond that.
+Bigger $\sigma$ means a wider kernel and more blur. A handy rule is to make the kernel about $6\sigma$ wide (three $\sigma$ on each side), because the Gaussian is basically zero beyond that.
 
 ```python
 import numpy as np
@@ -73,45 +73,45 @@ ref = ndi.gaussian_filter(img, 2.0, mode="reflect", truncate=3.0)
 print(k.shape, np.abs(ours - ref).max() < 1e-6)   # (13, 13) True
 ```
 
-In my original notebook the kernel coordinates were divided by the image size, so $\sigma$ was a fraction of the image width rather than a number of pixels. Both work, but pixels are the usual unit and match library functions.
+In my original notebook I divided the kernel coordinates by the image size, so $\sigma$ was a fraction of the image width instead of a number of pixels. Both work, but pixels are the usual unit and match what library functions expect.
 
 ## Why the Gaussian is special
 
-**It is separable.** $g(x, y) = g(x)\,g(y)$, so a 2D blur is a 1D blur along rows followed by a 1D blur along columns. For a kernel of width $K$ this costs $2K$ multiplications per pixel instead of $K^2$.
+**It's separable.** $g(x, y) = g(x)\,g(y)$, so a 2D blur is just a 1D blur along the rows followed by a 1D blur along the columns. For a kernel of width $K$ that's $2K$ multiplications per pixel instead of $K^2$.
 
-**Its Fourier transform is also a Gaussian.** A Gaussian of width $\sigma$ in space has a frequency response
+**Its Fourier transform is also a Gaussian.** A Gaussian of width $\sigma$ in space has the frequency response
 
 $$
 G(\omega_x, \omega_y) = \exp\left(-\frac{\sigma^2(\omega_x^2 + \omega_y^2)}{2}\right),
 $$
 
-with $\omega$ in radians per pixel. It falls smoothly to zero with no side lobes and never flips sign. Wider in space means narrower in frequency.
+with $\omega$ in radians per pixel. It drops smoothly to zero with no side lobes and never flips sign. Wider in space means narrower in frequency.
 
 ![Left: frequency response of Gaussian kernels and of a 5 by 5 box filter. Right: the log spectrum of a Gaussian-blurred image](fig-frequency-response.png)
 
-So the Gaussian is a clean **low-pass filter**. In the frequency domain, blurring is multiplication of the image spectrum by $G$, which shrinks the high frequencies that carry fine detail and edges. This is the convolution theorem at work: convolution in space equals multiplication in frequency (see [The discrete Fourier transform of images](/notes/discrete-fourier-transform-of-images/)).
+So the Gaussian is a clean **low-pass filter** (it keeps low frequencies and removes high ones). In the frequency domain, blurring means multiplying the image spectrum by $G$, which shrinks the high frequencies that carry fine detail and edges. This is the convolution theorem: convolution in space is the same as multiplication in frequency (see [The discrete Fourier transform of images](/notes/discrete-fourier-transform-of-images/)).
 
-**Blurs compose simply.** Blurring with $\sigma_1$ and then with $\sigma_2$ equals one blur with $\sqrt{\sigma_1^2 + \sigma_2^2}$. This is the basis of scale space and image pyramids.
+**Blurs stack up simply.** Blurring with $\sigma_1$ and then with $\sigma_2$ is the same as one blur with $\sqrt{\sigma_1^2 + \sigma_2^2}$. That's the basis of scale space and image pyramids.
 
-**Small binomial kernels approximate it.** The kernels $[1, 2, 1]/4$ and $[1, 4, 6, 4, 1]/16$ are rows of Pascal's triangle and are close to sampled Gaussians. Their 2D versions are outer products, for example
+**Small binomial kernels are close to it.** The kernels $[1, 2, 1]/4$ and $[1, 4, 6, 4, 1]/16$ are rows of Pascal's triangle and look a lot like sampled Gaussians. Their 2D versions are outer products, for example
 
 $$
 \frac{1}{16}\begin{bmatrix}1 & 2 & 1\\ 2 & 4 & 2\\ 1 & 2 & 1\end{bmatrix}.
 $$
 
-They are cheap and are the standard anti-aliasing filters before downsampling (see [Sampling and aliasing](/notes/sampling-and-aliasing/)).
+They're cheap and are the standard anti-aliasing filters before downsampling (see [Sampling and aliasing](/notes/sampling-and-aliasing/)).
 
 ## Filtering in the frequency domain
 
-You can also filter by editing the spectrum directly: take the FFT, multiply by a mask, and invert. In my DFT notebook I kept only a $3 \times 3$ block around zero frequency of a tiny $5 \times 5$ image and got a smooth blob back. A hard-edged mask like that is an ideal low-pass filter, and its spatial kernel is a sinc, so on real images it causes ringing near edges. A Gaussian mask avoids this, which is another reason the Gaussian is the default.
+You can also filter by editing the spectrum directly: take the FFT, multiply by a mask, and invert. In my DFT notebook I kept only a $3 \times 3$ block around zero frequency of a tiny $5 \times 5$ image and got a smooth blob back. A hard-edged mask like that is an "ideal" low-pass filter, but its spatial kernel is a sinc, so on real images it causes ringing near edges. A Gaussian mask avoids this, which is one more reason the Gaussian is the default.
 
 ## Key takeaways
 
-- Linear shift-invariant filters are exactly the convolutions; the kernel is the filter's response to a single bright pixel.
-- Many libraries compute correlation, which equals convolution only for symmetric kernels.
-- The Gaussian blur is normalised, separable and smooth in both space and frequency, with no ringing.
-- Larger $\sigma$ means more blur in space and a narrower pass band in frequency.
-- Binomial kernels such as $[1, 2, 1]/4$ are cheap Gaussian approximations used before downsampling.
+- Linear shift-invariant filters are exactly the convolutions. The kernel is what the filter outputs for a single bright pixel.
+- Many libraries compute correlation, which is the same as convolution only for symmetric kernels.
+- The Gaussian blur sums to 1, is separable, and is smooth in both space and frequency, so there's no ringing.
+- Bigger $\sigma$ means more blur in space and a narrower band of kept frequencies.
+- Binomial kernels like $[1, 2, 1]/4$ are cheap stand-ins for a Gaussian, used before downsampling.
 
 ## Resources
 

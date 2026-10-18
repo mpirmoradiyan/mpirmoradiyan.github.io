@@ -23,11 +23,11 @@ sources:
 status: draft
 ---
 
-A GPT is trained to predict token $t+1$ from tokens $1$ to $t$, at every position of a sequence at once. If position $t$ could attend to position $t+1$, it would simply copy the answer, the training loss would collapse, and the model would be useless at generation time, when the future does not exist yet. **Causal** (or masked) self-attention blocks every token from attending to anything after it. This note shows the mask, the clean way to apply it, and a neat matrix trick behind it.
+A GPT is trained to predict token $t+1$ from tokens $1$ to $t$, at every position of a sequence at the same time. If position $t$ could look at position $t+1$, it would just copy the answer. The training loss would drop to almost nothing, and the model would be useless when generating, because then the future doesn't exist yet. **Causal** (or masked) self-attention stops every token from looking at anything after it. Here I go through the mask, the clean way to apply it, and a neat matrix trick that sits behind it.
 
 ## The trick: a running average as one matrix product
 
-Start with a simpler goal. For a sequence $x_1, \dots, x_T$, replace each $x_t$ by the average of $x_1, \dots, x_t$, the token itself and everything before it. A double loop does it, but slowly. A lower-triangular matrix does it in one multiplication:
+Start with something simpler. For a sequence $x_1, \dots, x_T$, replace each $x_t$ by the average of $x_1, \dots, x_t$: the token itself and everything before it. A double loop works, but it's slow. A lower-triangular matrix (ones on and below the diagonal, zeros above) does it in one multiplication:
 
 ```python
 import torch
@@ -40,13 +40,13 @@ print(a)        # [[1, 0, 0], [0.5, 0.5, 0], [0.33, 0.33, 0.33]]
 print(a @ b)    # row t = mean of rows 0..t of b
 ```
 
-Row $t$ of `a` has equal weights on positions $0, \dots, t$ and zeros after, so row $t$ of `a @ b` is the average of the first $t+1$ rows of `b`. With a batch, a (T, T) weight matrix times a (B, T, C) tensor broadcasts to (B, T, C), handling every sequence at once.
+Row $t$ of `a` has equal weights on positions $0, \dots, t$ and zeros after that, so row $t$ of `a @ b` is the average of the first $t+1$ rows of `b`. With a batch, a (T, T) weight matrix times a (B, T, C) tensor broadcasts to (B, T, C), so every sequence is handled at once.
 
-This is already causal attention with fixed, uniform weights. Self-attention makes the weights data-dependent, and the mask keeps them causal.
+When I saw this, it clicked: this is already causal attention, just with fixed, equal weights. Self-attention makes the weights depend on the data, and the mask keeps them from looking ahead.
 
 ## Masking with minus infinity
 
-The same uniform weights can be produced with a softmax:
+You can get the same equal weights out of a softmax:
 
 ```python
 tril = torch.tril(torch.ones(T, T))
@@ -55,24 +55,24 @@ scores = scores.masked_fill(tril == 0, float("-inf"))    # hide the future
 weights = torch.softmax(scores, dim=-1)                  # same matrix as a above
 ```
 
-Since $e^{-\infty} = 0$, masked positions get exactly zero weight, and the softmax spreads the remaining probability over the allowed positions. Replace the zeros by real query-key scores and you have causal self-attention:
+Since $e^{-\infty} = 0$, the hidden positions get exactly zero weight, and the softmax spreads the rest of the probability over the allowed positions. Swap the zeros for real query-key scores and you have causal self-attention:
 
 $$
 \operatorname{CausalAttention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}} + M\right) V,
 \qquad M_{ij} = \begin{cases} 0 & j \le i \\ -\infty & j > i \end{cases}
 $$
 
-$M$ is the mask: 0 where token $i$ may look at token $j$, $-\infty$ where $j$ lies in the future.
+$M$ is the mask: 0 where token $i$ is allowed to look at token $j$, and $-\infty$ where $j$ is in the future.
 
 ## Mask before the softmax, not after
 
-Another way that seems natural is to compute the full softmax, zero out the upper triangle, and renormalize each row so it sums to 1 again. It gives exactly the same numbers. In my notebook, both versions produced the row `[0.5517, 0.4483, 0, 0, 0, 0]` for the second token. Future tokens do not leak through the first softmax's denominator, because renormalizing removes their contribution completely.
+Another way that feels natural is to do the full softmax, zero out the upper triangle, and then rescale each row so it adds up to 1 again. I wondered whether the future tokens would sneak in through the first softmax's denominator. They don't. It gives exactly the same numbers, because the rescaling removes their part completely. In my notebook, both versions gave the row `[0.5517, 0.4483, 0, 0, 0, 0]` for the second token.
 
-Still, masking the scores with $-\infty$ before the softmax is the standard choice. It is one operation instead of three, and it is how the fused attention kernels in PyTorch work. For the mask itself, `torch.triu(torch.ones(T, T), diagonal=1)` marks the positions to hide (strictly above the diagonal), and `torch.tril` marks the ones to keep; use whichever reads better.
+Still, masking the scores with $-\infty$ before the softmax is the usual choice. It's one step instead of three, and it's how PyTorch's fused attention kernels do it. For the mask itself, `torch.triu(torch.ones(T, T), diagonal=1)` marks the positions to hide (strictly above the diagonal), and `torch.tril` marks the ones to keep. Use whichever reads better to you.
 
 ## Dropout on the attention weights
 
-GPT models also apply dropout to the attention weights during training. A random subset of weights is set to zero, and the survivors are scaled by $1/(1-p)$ so the expected total stays the same. With $p = 0.5$ the kept weights double, which is why a matrix of ones turns into a pattern of 0s and 2s. Dropout makes the model rely less on any single connection. It is switched off by `model.eval()` at inference time.
+GPT models also use dropout on the attention weights during training. Some weights are set to zero at random, and the ones that survive are scaled by $1/(1-p)$ so the expected total stays the same. With $p = 0.5$ the kept weights double, which is why a matrix of ones turns into a pattern of 0s and 2s. This confused me the first time I saw it. Dropout makes the model depend less on any single connection. `model.eval()` turns it off when you actually use the model.
 
 ## A batched causal attention module
 
@@ -98,29 +98,29 @@ class CausalSelfAttention(nn.Module):
         return weights @ v                                 # (B, T, d_out)
 ```
 
-Three details matter here:
+Three small things in there are easy to get wrong:
 
-- `k.transpose(1, 2)` swaps only the last two dimensions, so the batch dimension is left alone. Plain `k.T` would also reverse the batch axis.
-- `register_buffer` stores the mask with the module, so it moves to the GPU with `model.to(device)` and is saved in the state dict, but the optimizer does not treat it as a parameter.
-- `self.mask[:T, :T]` slices the mask to the actual sequence length, so the same module handles sequences shorter than `context_length`, which happens all the time during generation.
+- `k.transpose(1, 2)` swaps only the last two dimensions and leaves the batch dimension alone. Plain `k.T` would flip the batch axis too.
+- `register_buffer` keeps the mask inside the module, so it moves to the GPU with `model.to(device)` and gets saved in the state dict. But the optimizer doesn't treat it as something to train.
+- `self.mask[:T, :T]` cuts the mask down to the real sequence length. That way the same module works on sequences shorter than `context_length`, which happens all the time during generation.
 
-PyTorch also offers `torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)`, which applies the same mask inside a fused, memory-efficient kernel.
+PyTorch also has `torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)`, which applies the same mask inside one fused kernel that uses less memory.
 
-## Where causal attention is used
+## Where causal attention shows up
 
 - **Decoder-only models** (GPT, Llama and most chat LLMs) use causal attention in every layer.
-- **Encoder models** (BERT) let every token see the whole input and use no causal mask; they are built for understanding text, not generating it.
-- **Encoder-decoder models** (the original transformer, T5) use full attention in the encoder, causal attention in the decoder, and cross-attention from decoder to encoder.
+- **Encoder models** (BERT) let every token see the whole input, with no causal mask. They're built for understanding text, not generating it.
+- **Encoder-decoder models** (the original transformer, T5) use full attention in the encoder, causal attention in the decoder, and cross-attention from the decoder to the encoder.
 
-Because each position only sees the past, one forward pass over a training sequence of length $T$ yields $T$ valid next-token predictions, one per position. That is what makes GPT training so efficient.
+Because each position only sees the past, one forward pass over a training sequence of length $T$ gives $T$ honest next-token predictions, one per position. That's a big part of why GPT training is so efficient.
 
 ## Key takeaways
 
-- Causal attention lets token $t$ attend only to positions $1, \dots, t$, so next-token training cannot cheat.
-- A normalized lower-triangular matrix computes running averages; adding learned scores turns this into causal self-attention.
-- Set the masked scores to $-\infty$ before the softmax; they become exact zeros and the rest renormalizes automatically.
-- Store the mask with `register_buffer` and slice it to the current length.
-- Dropout on attention weights is a standard regularizer during training and is disabled at inference.
+- Causal attention lets token $t$ look only at positions $1, \dots, t$, so next-token training can't cheat.
+- A lower-triangular matrix with rows that sum to 1 computes running averages. Add learned scores and it becomes causal self-attention.
+- Set the hidden scores to $-\infty$ before the softmax. They turn into exact zeros and the rest rescales by itself.
+- Keep the mask in a `register_buffer` and cut it to the current length.
+- Dropout on the attention weights is a common way to fight overfitting during training, and it's turned off when using the model.
 
 ## Resources
 

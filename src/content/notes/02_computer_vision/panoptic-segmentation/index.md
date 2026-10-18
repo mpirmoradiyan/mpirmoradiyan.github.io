@@ -4,7 +4,7 @@ slug: panoptic-segmentation
 date: 2025-09-12
 topic: Computer Vision
 tags: [panoptic-segmentation, instance-segmentation, semantic-segmentation, mask-rcnn, fpn, panoptic-quality, pytorch]
-summary: "What panoptic segmentation asks for, how Panoptic FPN produces it from an instance head and a semantic head, how the two outputs are merged, and how Panoptic Quality scores the result."
+summary: "What panoptic segmentation asks for, how Panoptic FPN gets there with an instance head and a semantic head, how the two outputs are merged, and how Panoptic Quality scores it."
 sources:
   - title: "Panoptic Segmentation"
     author: "Alexander Kirillov, Kaiming He, Ross Girshick, Carsten Rother, Piotr Dollár"
@@ -35,26 +35,26 @@ sources:
 status: draft
 ---
 
-Semantic segmentation tells you that a pixel is "person", but not *which* person. Instance segmentation separates each person, but ignores the sky, the road and the grass. Panoptic segmentation asks for both at once: every pixel gets a class, and pixels of countable objects also get an instance ID. It is the closest of the three tasks to a complete description of a scene, which is why it matters for driving, mapping and robotics.
+Semantic segmentation tells you a pixel is "person", but not *which* person. Instance segmentation separates each person, but ignores the sky, the road and the grass. Panoptic segmentation wants both at once: every pixel gets a class, and pixels that belong to countable objects also get an instance ID. Of the three tasks, it's the closest to a full description of a scene, which is why people care about it for driving, mapping and robotics.
 
 ## Things and stuff
 
 Kirillov et al. (2019) split classes into two kinds:
 
-- **Things** are countable objects with a clear shape: person, car, bicycle, tree. Each one gets its own instance ID.
-- **Stuff** is amorphous, uncountable regions: sky, grass, road, water. All pixels of one stuff class share one segment.
+- **Things** are objects you can count, with a clear shape: person, car, bicycle, tree. Each one gets its own instance ID.
+- **Stuff** is shapeless regions you can't really count: sky, grass, road, water. All pixels of one stuff class share one segment.
 
-The output is a single map where each pixel has a pair $(c, z)$: class $c$ and instance ID $z$. For stuff, $z$ is not used. A common trick packs the pair into one integer:
+The output is one map where each pixel has a pair $(c, z)$: class $c$ and instance ID $z$. For stuff, $z$ isn't used. A handy trick packs the pair into a single integer:
 
 $$
 \text{id} = c \cdot L + z
 $$
 
-where $L$ is a "label divisor" larger than the number of instances in any image (for example 1000). Then $c = \lfloor \text{id} / L \rfloor$ and $z = \text{id} \bmod L$. A key rule: **no overlaps**. Each pixel belongs to exactly one segment. This is different from instance segmentation, where masks may overlap.
+where $L$ is a "label divisor" larger than the number of instances in any image (for example 1000). Then $c = \lfloor \text{id} / L \rfloor$ and $z = \text{id} \bmod L$. One important rule: **no overlaps**. Each pixel belongs to exactly one segment. That's different from instance segmentation, where masks are allowed to overlap.
 
 ## Panoptic FPN: two heads on one backbone
 
-The simplest strong baseline is Panoptic FPN (Kirillov, Girshick, He and Dollár, 2019). It takes Mask R-CNN and adds one light branch:
+The simplest model that works well is Panoptic FPN (Kirillov, Girshick, He and Dollár, 2019). The idea is pretty simple: take Mask R-CNN and bolt on one small extra branch:
 
 | Branch | Output | Loss |
 |---|---|---|
@@ -63,9 +63,9 @@ The simplest strong baseline is Panoptic FPN (Kirillov, Girshick, He and Dollár
 | Semantic head | Per-pixel scores for the stuff classes + one "other" class for all thing pixels | per-pixel cross-entropy |
 | Panoptic merge | One ID map, H×W | none (a fixed heuristic) |
 
-The two heads are trained together with a weighted sum of their losses. The merge step has no parameters.
+Both heads are trained together, using a weighted sum of their losses. The merge step has nothing to learn.
 
-The semantic head in the paper is small. Each FPN level is upsampled to 1/4 of the input size with a few conv + upsample stages, the results are summed, and a 1×1 convolution predicts the classes. Here is a simplified version (one conv per level instead of several stages):
+The semantic head in the paper is small. Each FPN level gets upsampled to 1/4 of the input size with a few conv + upsample stages, the results are added up, and a 1×1 convolution predicts the classes. Here's a simpler version (one conv per level instead of several stages):
 
 ```python
 import torch.nn as nn
@@ -89,11 +89,11 @@ class SemanticHead(nn.Module):
         return F.interpolate(logits, size=out_size, mode="bilinear", align_corners=False)
 ```
 
-`feats` is the dictionary that torchvision's `resnet_fpn_backbone` (or the `backbone` of `maskrcnn_resnet50_fpn`) returns. Using all levels, not only the finest one, gives the head both detail and context.
+`feats` is the dictionary that torchvision's `resnet_fpn_backbone` (or the `backbone` of `maskrcnn_resnet50_fpn`) returns. Using all the levels, not just the finest one, gives the head both fine detail and wider context.
 
-## What the data loader must return
+## What the data loader has to return
 
-For training, each image needs instance targets and a dense stuff map. In PyTorch, a detection-style dataset usually returns the image plus a dictionary:
+For training, each image needs instance targets plus a full per-pixel stuff map. In PyTorch, a detection-style dataset usually returns the image and a dictionary:
 
 ```python
 target = {
@@ -104,15 +104,15 @@ target = {
 }
 ```
 
-Because images have different sizes, the `collate_fn` returns lists instead of stacked tensors. When resizing the semantic map, use **nearest-neighbour** interpolation so class IDs are never blended into meaningless values. In real projects, annotations usually come in the COCO panoptic format: one PNG per image where each segment has a unique color-encoded ID, plus a JSON file listing each segment's category, and whether it is a thing or stuff.
+Since images come in different sizes, the `collate_fn` returns lists instead of stacked tensors. When you resize the semantic map, use **nearest-neighbour** interpolation. Otherwise class IDs get blended into in-between numbers that mean nothing (class 2.5 isn't a thing). Real annotations usually come in the COCO panoptic format: one PNG per image where each segment has its own colour-encoded ID, plus a JSON file listing each segment's category and whether it's a thing or stuff.
 
 ## Merging the two outputs
 
-The two heads can disagree: an instance mask and the semantic map may claim the same pixel, and instance masks may overlap each other. Panoptic FPN resolves this with a simple, ordered procedure:
+The two heads can disagree. An instance mask and the semantic map might both claim the same pixel, and instance masks can overlap each other. Panoptic FPN sorts this out with a simple step-by-step rule:
 
-1. Sort detected instances by confidence and drop those below a score threshold.
-2. Paste instance masks one by one. Skip an instance if most of its mask (e.g. more than half) is already taken by higher-scoring instances; otherwise keep only its free pixels.
-3. Fill the remaining pixels with the semantic head's stuff prediction. Remove stuff regions that are too small (the paper uses an area threshold) and leave them unlabeled.
+1. Sort the detected instances by confidence and drop the ones below a score threshold.
+2. Paste the instance masks one at a time. Skip an instance if most of its mask (say, more than half) is already taken by higher-scoring instances; otherwise keep only its free pixels.
+3. Fill whatever is left with the semantic head's stuff prediction. Stuff regions that are too small (the paper uses an area threshold) get removed and left unlabeled.
 
 ```python
 import torch
@@ -144,31 +144,31 @@ def merge_panoptic(inst_masks, inst_scores, inst_classes, sem_pred,
     return pan
 ```
 
-In practice, use a library implementation (Detectron2, MMDetection) for this step. It handles thing and stuff ID spaces, ignore labels and edge cases properly.
+For real use, it's better to take a library version (Detectron2, MMDetection) of this step. Those handle thing and stuff ID spaces, ignore labels and the odd edge cases properly.
 
 ## Measuring it: Panoptic Quality
 
-Kirillov et al. also proposed one metric for the whole task. A predicted segment and a ground-truth segment of the same class **match** if their IoU is greater than 0.5. Because segments do not overlap, this threshold guarantees each match is unique. Matched pairs are true positives (TP); unmatched predictions are false positives (FP); unmatched ground-truth segments are false negatives (FN). Then, for each class,
+Kirillov et al. also came up with one metric for the whole task. A predicted segment and a ground-truth segment of the same class **match** if their IoU is above 0.5. This part confused me at first: why does 0.5 make matches unique? Because segments can't overlap, two predictions can't both cover more than half of the same ground-truth segment. Matched pairs are true positives (TP); unmatched predictions are false positives (FP); unmatched ground-truth segments are false negatives (FN). Then, for each class,
 
 $$
 \text{PQ} = \frac{\sum_{(p,g) \in TP} \text{IoU}(p, g)}{|TP| + \tfrac{1}{2}|FP| + \tfrac{1}{2}|FN|}
 $$
 
-This splits neatly into two factors:
+This splits nicely into two parts:
 
 $$
 \text{PQ} = \underbrace{\frac{\sum_{TP} \text{IoU}(p,g)}{|TP|}}_{\text{SQ: segmentation quality}} \times \underbrace{\frac{|TP|}{|TP| + \tfrac{1}{2}|FP| + \tfrac{1}{2}|FN|}}_{\text{RQ: recognition quality}}
 $$
 
-SQ is the average IoU of the matched segments: how good the shapes are. RQ is an F1 score: how well the model finds the right segments. The final PQ is averaged over classes, and it is often reported separately for things (PQ^Th) and stuff (PQ^St). When object localization matters more than overall pixel accuracy, PQ (or PQ^Th) is a better model-selection metric than mean IoU or pixel accuracy, because it penalizes missed and spurious objects directly.
+So basically: SQ is the average IoU of the matched segments, meaning how good the shapes are. RQ is an F1 score, meaning how well the model finds the right segments at all. The final PQ is averaged over classes, and people often report it separately for things (PQ^Th) and stuff (PQ^St). If finding each object matters more than overall pixel accuracy, PQ (or PQ^Th) is a better metric for picking a model than mean IoU or pixel accuracy, because it directly punishes missed objects and made-up ones.
 
 ## Key takeaways
 
-- Panoptic segmentation gives every pixel a class, and gives pixels of "things" an instance ID, with no overlaps.
-- Panoptic FPN = Mask R-CNN for things + a light semantic head for stuff, sharing one FPN backbone.
-- A parameter-free merge step resolves conflicts: confident instances first, then stuff fills the gaps.
-- Use nearest-neighbour resizing for label maps and return lists of targets from the data loader.
-- Panoptic Quality = Segmentation Quality × Recognition Quality, with matches defined by IoU > 0.5.
+- Panoptic segmentation gives every pixel a class, and gives pixels of "things" an instance ID too, with no overlaps.
+- Panoptic FPN = Mask R-CNN for things + a small semantic head for stuff, both on one shared FPN backbone.
+- A merge step with nothing to learn sorts out conflicts: confident instances go first, then stuff fills the gaps.
+- Resize label maps with nearest-neighbour, and return lists of targets from the data loader.
+- Panoptic Quality = Segmentation Quality × Recognition Quality, where a match means IoU > 0.5.
 
 ## Resources
 

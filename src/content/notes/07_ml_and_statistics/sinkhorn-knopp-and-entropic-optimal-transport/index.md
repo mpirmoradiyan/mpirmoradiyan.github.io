@@ -4,7 +4,7 @@ slug: sinkhorn-knopp-and-entropic-optimal-transport
 date: 2026-04-21
 topic: ML & Statistics
 tags: [sinkhorn, optimal-transport, doubly-stochastic, matrix-scaling, assignment, wasserstein]
-summary: "How alternately normalising rows and columns turns a positive matrix into a doubly stochastic one, and how the same loop computes an entropy-regularised optimal transport plan, a soft and differentiable version of the assignment problem."
+summary: "How normalising rows and columns over and over turns a positive matrix into a doubly stochastic one, and why the same loop gives a soft, differentiable optimal transport plan (a soft version of the assignment problem)."
 sources:
   - title: "Concerning nonnegative matrices and doubly stochastic matrices"
     author: "Richard Sinkhorn, Paul Knopp (Pacific Journal of Mathematics, 1967)"
@@ -22,17 +22,17 @@ sources:
 status: draft
 ---
 
-Many problems come down to matching one set of things to another: detections to ground-truth boxes, keypoints in one image to keypoints in another, images to cluster prototypes. The exact answer is a hard one-to-one assignment, which is not differentiable. The Sinkhorn–Knopp algorithm gives a soft answer instead. It is a loop of two lines (normalise the rows, then the columns), and the same loop, applied to the right matrix, computes an entropy-regularised optimal transport plan.
+A lot of problems come down to matching one set of things to another: detections to ground-truth boxes, keypoints in one image to keypoints in another, images to cluster prototypes. The exact answer is a hard one-to-one assignment, and you can't take gradients through that. The Sinkhorn–Knopp algorithm gives a soft answer instead. What I like about it is how small it is: a loop of two lines (normalise the rows, then the columns). And the same loop, run on the right matrix, solves an entropy-regularised optimal transport problem.
 
 ## Doubly stochastic matrices
 
-A square matrix with non-negative entries is **doubly stochastic** when every row and every column sums to 1. Read entry $D_{ij}$ as "the fraction of source $i$ that goes to target $j$". Rows summing to 1 means each source sends out all of its mass. Columns summing to 1 means each target receives exactly one unit.
+A square matrix with non-negative entries is **doubly stochastic** when every row and every column sums to 1. The way I read entry $D_{ij}$ is "the fraction of source $i$ that goes to target $j$". Rows summing to 1 means each source sends out all of its mass. Columns summing to 1 means each target gets exactly one unit.
 
-A permutation matrix is the extreme case: each source goes entirely to one target. Birkhoff's theorem says that every doubly stochastic matrix is a weighted average (a convex combination) of permutation matrices. So a doubly stochastic matrix is a "soft permutation", and the set of all of them is the natural continuous relaxation of the assignment problem.
+A permutation matrix is the extreme case: each source goes completely to one target. Birkhoff's theorem says every doubly stochastic matrix is a weighted average (a convex combination) of permutation matrices. So you can think of a doubly stochastic matrix as a "soft permutation", and the set of all of them is the natural smooth version of the assignment problem.
 
 ## The algorithm
 
-Sinkhorn and Knopp (1967) proved a simple fact. Take a square matrix $A$ with strictly positive entries. Divide every row by its sum, then every column by its sum, and repeat. The matrix converges to a doubly stochastic matrix $D$, and that $D$ is unique.
+Sinkhorn and Knopp (1967) proved a simple fact. Take a square matrix $A$ whose entries are all strictly positive. Divide every row by its sum, then every column by its sum, and keep repeating. The matrix converges to a doubly stochastic matrix $D$, and that $D$ is unique.
 
 ```python
 import numpy as np
@@ -54,21 +54,21 @@ print(D.round(4), n_iter)
 #  [0.3929 0.3231 0.2839]]  6
 ```
 
-Six rounds are enough here. Each step fixes one set of sums and slightly breaks the other, but the error shrinks geometrically for a positive matrix.
+Six rounds are enough here. Each step fixes one set of sums and slightly breaks the other, but for a positive matrix the error shrinks geometrically, so it settles quickly.
 
-The result always has the form $D = \operatorname{diag}(r)\, A\, \operatorname{diag}(c)$ for two positive vectors $r$ and $c$. Every row division multiplies a row by a number, and every column division multiplies a column by a number; the products of all those numbers are $r$ and $c$. So the algorithm is really searching for two scaling vectors. You only need to store those, not the whole matrix at every step. This is the form used below.
+The result always looks like $D = \operatorname{diag}(r)\, A\, \operatorname{diag}(c)$ for two positive vectors $r$ and $c$. This took me a moment to see: every row division multiplies a row by a number, and every column division multiplies a column by a number, so multiplying all those numbers together gives $r$ and $c$. So the algorithm is really just searching for two scaling vectors. You only need to keep those, not the whole matrix at every step. That's the form used below.
 
-**When zeros appear.** If $A$ has zeros, the result may not exist or may be reached slowly. The matrix $\begin{pmatrix}1&1\\0&1\end{pmatrix}$ can only be balanced into the identity, which means the top-right entry must go to zero. It does, but only like $1/(2k)$ after $k$ rounds (0.0048 after 100 rounds, 0.0005 after 1000). The precise condition for an exact balance is that $A$ has *total support*: every non-zero entry lies on some permutation that avoids the zeros.
+**When there are zeros.** If $A$ has zeros, the result may not exist, or it may take a long time to get there. The matrix $\begin{pmatrix}1&1\\0&1\end{pmatrix}$ can only be balanced into the identity, which means the top-right entry has to go to zero. It does, but only like $1/(2k)$ after $k$ rounds (0.0048 after 100 rounds, 0.0005 after 1000). The exact condition for a perfect balance is that $A$ has *total support*: every non-zero entry lies on some permutation that avoids the zeros.
 
 ## From balancing to optimal transport
 
-Optimal transport asks: given a source distribution $a$ (a histogram with $n$ bins) and a target distribution $b$ (with $m$ bins), and a cost $C_{ij}$ of moving one unit of mass from bin $i$ to bin $j$, what is the cheapest plan $P$ that moves all of $a$ onto $b$?
+Optimal transport asks this: you have a source distribution $a$ (a histogram with $n$ bins), a target distribution $b$ (with $m$ bins), and a cost $C_{ij}$ for moving one unit of mass from bin $i$ to bin $j$. What's the cheapest plan $P$ that moves all of $a$ onto $b$?
 
 $$
 \min_{P \ge 0} \; \sum_{ij} P_{ij} C_{ij} \quad \text{subject to} \quad P\mathbf{1} = a, \;\; P^\top \mathbf{1} = b .
 $$
 
-The constraints say that the row sums of $P$ are $a$ and the column sums are $b$. With $a = b = \mathbf{1}/n$ and $n$ items on each side, this is the assignment problem (up to a factor of $n$), and the answer is a permutation. The optimal cost is the Wasserstein (earth mover's) distance between $a$ and $b$. Solving it exactly is a linear program, roughly $O(n^3)$, and the solution jumps when $C$ changes, so it cannot be backpropagated through cleanly.
+The constraints just say the row sums of $P$ are $a$ and the column sums are $b$. With $a = b = \mathbf{1}/n$ and $n$ items on each side, this is the assignment problem (up to a factor of $n$), and the answer is a permutation. The optimal cost is the Wasserstein (earth mover's) distance between $a$ and $b$. Solving it exactly is a linear program, roughly $O(n^3)$, and the solution jumps when $C$ changes, so you can't backpropagate through it cleanly.
 
 Cuturi (2013) added an entropy term that rewards spread-out plans:
 
@@ -76,13 +76,13 @@ $$
 \min_{P \ge 0} \; \sum_{ij} P_{ij} C_{ij} \;-\; \varepsilon\, H(P), \qquad H(P) = -\sum_{ij} P_{ij} (\log P_{ij} - 1).
 $$
 
-Here $\varepsilon > 0$ sets how much blur we accept. Setting the derivative to zero shows that the optimal plan has the form
+Here $\varepsilon > 0$ controls how much blur we're willing to accept. If you set the derivative to zero, the optimal plan turns out to have the form
 
 $$
 P = \operatorname{diag}(u)\, K\, \operatorname{diag}(v), \qquad K_{ij} = e^{-C_{ij}/\varepsilon}.
 $$
 
-This is exactly the Sinkhorn–Knopp form. The "Gibbs kernel" $K$ is positive, and we only need to find the scalings $u$ and $v$ that give the required row sums $a$ and column sums $b$. Alternating the two conditions gives the Sinkhorn iterations:
+And that's exactly the Sinkhorn–Knopp form. The "Gibbs kernel" $K$ is positive, and all we need are the scalings $u$ and $v$ that give the right row sums $a$ and column sums $b$. Switching back and forth between the two conditions gives the Sinkhorn iterations:
 
 ```python
 def sinkhorn(a, b, C, eps, n_iter=1000):
@@ -94,16 +94,16 @@ def sinkhorn(a, b, C, eps, n_iter=1000):
     return u[:, None] * K * v[None, :]
 ```
 
-Each iteration is two matrix–vector products, so it is fast, easy to batch on a GPU, and differentiable end to end. The plain Sinkhorn–Knopp loop from the first section is the special case $K = A$, $a = b = \mathbf{1}$.
+Each iteration is just two matrix–vector products, so it's fast, easy to batch on a GPU, and differentiable all the way through. The plain Sinkhorn–Knopp loop from the first section is the special case $K = A$, $a = b = \mathbf{1}$.
 
 ## What ε does
 
 ![Three entropic transport plans between two 1D histograms (blue on the left, green along the bottom) with squared-distance cost. With ε = 0.1 the plan is a blurry cloud; with ε = 0.01 it concentrates; with ε = 0.001 it is a thin monotone curve, close to the exact optimal transport map. The transport cost falls from 0.140 to 0.117 as ε shrinks.](fig-entropic-plans.png)
 
-- **Large ε**: the entropy term dominates. The plan tends to $a b^\top$, which sends every source everywhere, and it converges in a few iterations.
-- **Small ε**: the plan approaches the exact optimal plan. On a random $5 \times 5$ cost matrix, the arg-max of each row of $P$ matched the Hungarian algorithm's assignment for $\varepsilon = 0.1$ and below, and the cost at $\varepsilon = 0.01$ was within 0.1% of the exact optimum.
+- **Large ε**: the entropy term wins. The plan tends to $a b^\top$, which sends every source everywhere, and it converges in a few iterations.
+- **Small ε**: the plan gets close to the exact optimal plan. On a random $5 \times 5$ cost matrix, the arg-max of each row of $P$ matched the Hungarian algorithm's assignment for $\varepsilon = 0.1$ and below, and the cost at $\varepsilon = 0.01$ was within 0.1% of the exact optimum.
 
-Small ε has two prices. The number of iterations grows roughly like $1/\varepsilon$. And $e^{-C/\varepsilon}$ underflows to zero: with costs in $[0, 1]$ and $\varepsilon = 10^{-4}$, the plain loop above returns `nan`. The standard fix is to run the same iteration on logarithms, with dual potentials $f = \varepsilon \log u$ and $g = \varepsilon \log v$ and a stable log-sum-exp:
+Small ε comes at two costs. The number of iterations grows roughly like $1/\varepsilon$. And $e^{-C/\varepsilon}$ underflows to zero: with costs in $[0, 1]$ and $\varepsilon = 10^{-4}$, the plain loop above returns `nan`. The usual fix is to run the same iteration on logarithms, with dual potentials $f = \varepsilon \log u$ and $g = \varepsilon \log v$ and a numerically stable log-sum-exp:
 
 ```python
 from scipy.special import logsumexp
@@ -116,22 +116,22 @@ def sinkhorn_log(a, b, C, eps, n_iter=1000):
     return np.exp((f[:, None] + g[None, :] - C) / eps)
 ```
 
-Libraries such as POT and GeomLoss implement this log-domain version, plus tricks like gradually decreasing ε.
+Libraries like POT and GeomLoss implement this log-domain version, plus tricks like slowly lowering ε.
 
 ## Where it shows up in machine learning
 
-- **Feature matching.** SuperGlue matches keypoints between two images by running Sinkhorn on a learned score matrix, with an extra "dustbin" row and column for points that have no match.
-- **Self-supervised learning.** SwAV, and later DINOv2, use a few Sinkhorn–Knopp steps to spread a batch evenly over the prototypes, which prevents all images from collapsing onto one cluster (see [DINOv2](/notes/dinov2-self-supervised-features/)).
-- **Losses between distributions.** Sinkhorn divergences compare point clouds, histograms or generated samples while staying differentiable.
-- **Classical uses.** The same row-and-column scaling is known as iterative proportional fitting (adjusting a survey table to known margins) and as the RAS method for balancing economic input–output tables.
+- **Feature matching.** SuperGlue matches keypoints between two images by running Sinkhorn on a learned score matrix, with an extra "dustbin" row and column for points that don't have a match.
+- **Self-supervised learning.** SwAV, and later DINOv2, use a few Sinkhorn–Knopp steps to spread a batch evenly over the prototypes. That stops all images from collapsing onto one cluster (see [DINOv2](/notes/dinov2-self-supervised-features/)).
+- **Losses between distributions.** Sinkhorn divergences compare point clouds, histograms or generated samples and stay differentiable.
+- **Older uses.** The same row-and-column scaling is called iterative proportional fitting (adjusting a survey table to known totals) and the RAS method for balancing economic input–output tables.
 
 ## Key takeaways
 
-- Alternately normalising the rows and columns of a positive square matrix converges to a unique doubly stochastic matrix $\operatorname{diag}(r) A \operatorname{diag}(c)$.
-- A doubly stochastic matrix is a soft permutation, a mixture of hard assignments (Birkhoff).
-- Entropy-regularised optimal transport has a solution of the same form with $K = e^{-C/\varepsilon}$, so the Sinkhorn loop solves it with only matrix–vector products.
-- ε trades accuracy for speed and smoothness; for small ε, iterate in the log domain to avoid underflow.
-- Zeros in the matrix can make balancing slow or impossible; check for total support.
+- If you keep normalising the rows and columns of a positive square matrix, it converges to a unique doubly stochastic matrix $\operatorname{diag}(r) A \operatorname{diag}(c)$.
+- A doubly stochastic matrix is a soft permutation: a mix of hard assignments (Birkhoff).
+- Entropy-regularised optimal transport has a solution of the same form with $K = e^{-C/\varepsilon}$, so the Sinkhorn loop solves it using only matrix–vector products.
+- ε trades accuracy for speed and smoothness. For small ε, work in the log domain to avoid underflow.
+- Zeros in the matrix can make balancing slow or impossible, so check for total support.
 
 ## Resources
 

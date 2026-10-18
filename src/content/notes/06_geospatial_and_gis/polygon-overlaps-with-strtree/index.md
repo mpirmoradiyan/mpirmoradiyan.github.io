@@ -4,7 +4,7 @@ slug: polygon-overlaps-with-strtree
 date: 2025-02-18
 topic: Geospatial & GIS
 tags: [shapely, geopandas, spatial-index, strtree, r-tree, voronoi, polygons, post-processing]
-summary: "How a spatial index turns the search for overlapping polygons from O(n²) into roughly O(n log n), the Shapely 2 API that does it in one call, two easy-to-make bugs, and two ways to split an overlap: by priority or fairly with Voronoi cells."
+summary: "How a spatial index turns the hunt for overlapping polygons from O(n²) into roughly O(n log n), the one Shapely 2 call that does it, two easy bugs, and two ways to split an overlap: by priority or fairly with Voronoi cells."
 sources:
   - title: "Shapely documentation: STRtree, voronoi_polygons, union_all"
     author: "Shapely"
@@ -25,26 +25,26 @@ sources:
 status: draft
 ---
 
-Detection and segmentation models predict objects one at a time, so neighbouring polygons often overlap: two crowns that claim the same leaves, two buildings that share a wall. Before the polygons can be counted, measured or exported, every overlap needs an owner. The first step is to find which polygons overlap at all, and with tens of thousands of polygons, how you search decides whether that takes milliseconds or minutes. This note covers the search with a spatial index and two ways to split what you find. (Repairing invalid polygons first is covered in [polygon validity and shape metrics](/notes/polygon-validity-and-shape-metrics/).)
+Detection and segmentation models predict objects one at a time, so neighbouring polygons often overlap: two crowns claiming the same leaves, two buildings sharing a wall. Before you can count, measure or export the polygons, every overlap needs an owner. Step one is finding which polygons overlap at all. With tens of thousands of polygons, the way you search decides whether that takes milliseconds or minutes. These notes cover searching with a spatial index and two ways to split what you find. (Fixing invalid polygons first is in [polygon validity and shape metrics](/notes/polygon-validity-and-shape-metrics/).)
 
-## Why all-pairs is too slow
+## Why checking every pair is too slow
 
-The direct approach tests every polygon against every other one: $n(n-1)/2$ tests. Doubling the number of polygons makes the work four times larger. That is $O(n^2)$, and each test is itself not free, since an exact `intersects` on two polygons with $v$ vertices costs more than a box comparison.
+The obvious approach tests every polygon against every other one: $n(n-1)/2$ tests. Double the number of polygons and the work goes up four times. That's $O(n^2)$, and each test isn't free either, since an exact `intersects` on two polygons with $v$ vertices costs more than comparing two boxes.
 
-Yet almost all of those tests are pointless. A polygon in one corner of a map cannot touch one in the other corner. What we need is a way to ask "which polygons are near this one?" without looking at all of them.
+But almost all of those tests are pointless. A polygon in one corner of the map can't touch one in the other corner. What we want is a way to ask "which polygons are near this one?" without looking at all of them.
 
 ## The idea behind an STRtree
 
-An **R-tree** groups nearby objects into boxes, then groups those boxes into bigger boxes, and so on up to one root box. Each node stores only the **bounding box** of what lies below it. To find everything that might touch a query shape, you start at the root and descend only into boxes that overlap the query's box. Whole regions of the map are skipped in one comparison.
+An **R-tree** groups nearby objects into boxes, then groups those boxes into bigger boxes, and so on up to one root box. Each node only stores the **bounding box** of what's below it. To find everything that might touch a query shape, you start at the root and only go down into boxes that overlap the query's box. So whole regions of the map get skipped with one comparison.
 
-An **STRtree** (Sort-Tile-Recursive) is an R-tree built in one go from a fixed set of geometries. It sorts the boxes by $x$, cuts them into vertical slices, sorts each slice by $y$ and packs neighbours into full nodes. Building it costs $O(n \log n)$ (the sorting). A query costs about $O(\log n + k)$, where $k$ is the number of boxes it returns. Querying all $n$ polygons therefore costs about $O(n \log n + K)$, with $K$ the total number of candidate pairs, which is close to $O(n)$ times the typical number of neighbours when density does not grow with the map.
+An **STRtree** (Sort-Tile-Recursive) is an R-tree built in one go from a fixed set of geometries. It sorts the boxes by $x$, cuts them into vertical slices, sorts each slice by $y$, and packs neighbours into full nodes. Building it costs $O(n \log n)$ (that's the sorting). A query costs about $O(\log n + k)$, where $k$ is the number of boxes it returns. So querying all $n$ polygons costs about $O(n \log n + K)$, with $K$ the total number of candidate pairs. That's close to $O(n)$ times the usual number of neighbours, as long as the density doesn't grow with the map.
 
-The search runs in two phases:
+The search has two phases:
 
-1. **Filter**: the tree returns candidates whose *bounding boxes* intersect the query box. Cheap, but it includes false positives (two round crowns can have touching boxes and still not touch).
-2. **Refine**: an exact geometric predicate (`intersects`, `overlaps`, ...) is run on the candidates only.
+1. **Filter**: the tree returns candidates whose *bounding boxes* intersect the query box. Cheap, but it includes false alarms (two round crowns can have touching boxes and still not touch).
+2. **Refine**: an exact geometric test (`intersects`, `overlaps`, ...) runs on the candidates only.
 
-In Shapely 2 both phases happen in one vectorised call:
+In Shapely 2, both phases happen in one vectorised call:
 
 ```python
 import numpy as np, shapely
@@ -66,11 +66,11 @@ geoms = random_crowns(4000)
 i, j = overlapping_pairs(geoms)
 ```
 
-Passing an array to `query` returns a $2 \times m$ array: row 0 indexes the input, row 1 the tree. Every polygon intersects itself, so the pairs $(k, k)$ are always present, and each real pair appears twice; `i < j` removes both. With GeoPandas the same call is `gdf.sindex.query(gdf.geometry, predicate="intersects")`, or a self spatial join with `gpd.sjoin(gdf, gdf, predicate="intersects")`.
+Passing an array to `query` gives back a $2 \times m$ array: row 0 indexes the input, row 1 the tree. Every polygon intersects itself, so the pairs $(k, k)$ are always there, and each real pair shows up twice. `i < j` gets rid of both. In GeoPandas the same call is `gdf.sindex.query(gdf.geometry, predicate="intersects")`, or a self spatial join with `gpd.sjoin(gdf, gdf, predicate="intersects")`.
 
 ![Log-log plot of the time to find all intersecting pairs against the number of polygons. The all-pairs line rises four times for each doubling, reaching about 1.8 s at 4,000 polygons. The STRtree line rises about two times per doubling and stays below 0.05 s at 8,000 polygons.](fig-strtree-timing.png)
 
-On random discs the all-pairs loop takes 1.8 s for 4,000 polygons; the tree takes 0.02 s and gives the same pairs. The gap keeps widening: it is a different growth rate, not a constant speed-up.
+On random discs, the all-pairs loop takes 1.8 s for 4,000 polygons. The tree takes 0.02 s and finds the same pairs. And the gap keeps growing, because it's a different growth rate, not just a constant speed-up.
 
 ## Two bugs that look correct
 
@@ -81,13 +81,13 @@ tree = STRtree(geoms)
 matches = [m for m in tree.query(g) if m != g]   # m is an int, g a Polygon: never equal
 ```
 
-An integer never equals a polygon, so self is never removed and **every** polygon is reported as overlapping something. The fix is to compare indices (`m != k`) or use the array form above.
+An integer is never equal to a polygon, so self never gets removed and **every** polygon gets reported as overlapping something. The fix is to compare indices (`m != k`) or use the array form above.
 
-**Forgetting the refine step.** `tree.query(g)` without a `predicate`, and GeoPandas' `sindex.intersection(bounds)`, return only the box filter. Treating that as "intersects" flags round objects whose boxes touch at the corners. A related trap: these functions return **positions**, while `iterrows()` gives **index labels**. After filtering or sorting a GeoDataFrame the two differ, so compare positions with positions (use `iloc`, or `reset_index(drop=True)` first).
+**Skipping the refine step.** `tree.query(g)` without a `predicate`, and GeoPandas' `sindex.intersection(bounds)`, only do the box filter. If you treat that as "intersects", you flag round objects whose boxes just touch at the corners. A related trap: these functions return **positions**, while `iterrows()` gives **index labels**. After filtering or sorting a GeoDataFrame, the two don't match anymore, so compare positions with positions (use `iloc`, or `reset_index(drop=True)` first).
 
 ## From pairs to clusters
 
-Pairs alone are awkward to work with. Turn them into a graph (polygons are nodes, overlaps are edges) and take connected components. Each component is an independent cluster that can be resolved on its own, and polygons in clusters of size one need no work at all:
+Pairs on their own are awkward to work with. Turn them into a graph (polygons are nodes, overlaps are edges) and take connected components. Each component is a separate cluster you can sort out on its own, and polygons in clusters of size one need no work at all:
 
 ```python
 from scipy.sparse import coo_matrix
@@ -99,13 +99,13 @@ n_clusters, cluster_id = connected_components(adj, directed=False)
 standalone = np.bincount(cluster_id)[cluster_id] == 1      # polygons that touch nobody
 ```
 
-The pairs also give overlap statistics cheaply. `shapely.area(shapely.intersection(geoms[i], geoms[j]))` divided by the union area is the IoU of every pair in one vectorised line. A high IoU usually means a duplicate detection (keep one), while a small overlap means two real objects that both reached a little too far (split it).
+The pairs also give you overlap stats almost for free. `shapely.area(shapely.intersection(geoms[i], geoms[j]))` divided by the union area is the IoU (intersection over union) of every pair, in one vectorised line. A high IoU usually means a duplicate detection (keep one). A small overlap means two real objects that both reached a bit too far (split it).
 
 ## Splitting an overlap
 
 ![Left: four circles, three of them overlapping, with confidence scores 0.80, 0.95, 0.60 and 0.90. Middle: after a priority split the 0.95 circle is whole and the others are cut where they met it. Right: after a Voronoi split the shared areas are divided along straight lines between the circle centres; dashed lines show the Voronoi cells.](fig-overlap-splitting.png)
 
-There is no single right answer; the common approaches are:
+There's no single right answer. The common approaches are:
 
 | Approach | What happens to the overlap | Good when | Cost |
 |---|---|---|---|
@@ -114,7 +114,7 @@ There is no single right answer; the common approaches are:
 | Geometric split (bisector / Voronoi) | divided between the polygons | neither polygon deserves it more | ignores which prediction was better |
 | Merge | polygons are united into one | the parts are pieces of one object | wrong when they are two objects |
 
-The second and third need a little code.
+The second and third need a bit of code.
 
 **By priority.** Give the whole overlap to the polygon you trust more, usually the one with the higher model score. Each polygon subtracts the union of its **stronger** neighbours:
 
@@ -133,9 +133,9 @@ def split_by_priority(polys, scores, i, j):
     return out
 ```
 
-The direction of the comparison is easy to flip by accident. Subtracting neighbours with score **lower or equal** to your own does the opposite of what you want: the most confident polygon gets cut by every weaker one, and two polygons with equal scores cut each other so the overlap belongs to nobody. A strict ranking with a tie-breaker avoids both problems.
+It's easy to flip the comparison by accident. If you subtract neighbours with a score **lower or equal** to your own, you get the opposite of what you want: the most confident polygon gets cut by every weaker one, and two polygons with equal scores cut each other, so the overlap belongs to nobody. A strict ranking with a tie-breaker avoids both problems.
 
-**Fairly, with Voronoi cells.** When neither polygon deserves the overlap more, divide it. For two polygons the natural cut is the perpendicular bisector between their centroids: every point of the overlap goes to the nearer centre. For many polygons that rule is exactly the **Voronoi diagram** of the centroids. Each polygon keeps its uncontested part, plus the part of its overlap that falls in its own cell:
+**Fairly, with Voronoi cells.** When neither polygon deserves the overlap more, split it. For two polygons, the natural cut is the perpendicular bisector between their centroids: every point of the overlap goes to the nearer centre. For many polygons, that rule is exactly the **Voronoi diagram** of the centroids. Each polygon keeps the part nobody else claims, plus the bit of its overlap that falls in its own cell:
 
 ```python
 def split_by_voronoi(polys, i, j):
@@ -151,15 +151,15 @@ def split_by_voronoi(polys, i, j):
     return out
 ```
 
-`ordered=True` (GEOS 3.12 or newer) keeps cell $k$ aligned with seed $k$. Both methods return polygons that no longer overlap. Two limits of the Voronoi split: the bisector ignores size, so a big object loses as much to a small neighbour as the other way round (a weighted, or power, diagram fixes that); and in a cluster of three or more, a sliver of overlap can fall in the cell of a polygon that does not contain it and is then dropped. That is a fraction of a percent in the example above, but check total area if it matters.
+`ordered=True` (GEOS 3.12 or newer) keeps cell $k$ lined up with seed $k$. Both methods give polygons that don't overlap anymore. The Voronoi split has two limits. The bisector ignores size, so a big object loses as much to a small neighbour as the other way round (a weighted, or power, diagram fixes that). And in a cluster of three or more, a sliver of overlap can land in the cell of a polygon that doesn't contain it, and then it just gets dropped. That's a fraction of a percent in the example above, but check the total area if it matters.
 
 ## Key takeaways
 
-- All-pairs overlap search is $O(n^2)$; an STRtree makes it about $O(n \log n)$ by filtering on bounding boxes first.
-- In Shapely 2, `STRtree(geoms).query(geoms, predicate="intersects")` returns all index pairs; drop `i >= j`.
-- `query` returns integer positions, not geometries, and without a predicate it is only a box test.
-- Group pairs into connected components and resolve each cluster on its own.
-- Overlaps can be suppressed, given to the stronger polygon, split by Voronoi cells or merged; the right choice depends on whether the polygons are the same object.
+- Checking all pairs for overlap is $O(n^2)$. An STRtree makes it about $O(n \log n)$ by filtering on bounding boxes first.
+- In Shapely 2, `STRtree(geoms).query(geoms, predicate="intersects")` returns all index pairs. Drop `i >= j`.
+- `query` returns integer positions, not geometries, and without a predicate it's only a box test.
+- Group pairs into connected components and handle each cluster on its own.
+- Overlaps can be suppressed, given to the stronger polygon, split by Voronoi cells or merged. The right choice depends on whether the polygons are really the same object.
 
 ## Resources
 

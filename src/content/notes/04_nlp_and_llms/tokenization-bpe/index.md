@@ -4,7 +4,7 @@ slug: tokenization-bpe
 date: 2025-02-28
 topic: NLP & LLMs
 tags: [tokenization, bpe, byte-pair-encoding, utf-8, tiktoken, gpt-2, special-tokens]
-summary: "Why LLMs neither read characters nor whole words, how byte-pair encoding builds a subword vocabulary from UTF-8 bytes, and how GPT-style tokenizers add regex pre-splitting and special tokens."
+summary: "Why LLMs read neither single characters nor whole words, how byte-pair encoding builds word pieces out of UTF-8 bytes, and what extra tricks GPT tokenizers add on top."
 sources:
   - title: "Let's build the GPT Tokenizer"
     author: "Andrej Karpathy (Neural Networks: Zero to Hero)"
@@ -31,34 +31,34 @@ sources:
 status: draft
 ---
 
-A language model only sees integers. The tokenizer decides how text is cut into pieces and which integer each piece gets. That choice affects almost everything downstream: how long sequences are, how much text fits in the context window, how well the model handles rare words, code, numbers and non-English text. Many odd LLM behaviours, such as trouble spelling words or doing arithmetic, trace back to tokenization. This note covers the trade-off, the byte-pair encoding (BPE) algorithm used by the GPT family, and the extra machinery around it.
+A language model never sees text, only integers. The tokenizer is the thing that chops text into pieces and gives each piece a number. I used to think of it as a boring preprocessing step, but it affects almost everything after it: how long sequences get, how much text fits in the context window, and how well the model copes with rare words, code, numbers and non-English text. A lot of weird LLM behaviour, like being bad at spelling or arithmetic, comes back to tokenization. These notes cover the basic trade-off, the byte-pair encoding (BPE) algorithm the GPT models use, and the extra pieces around it.
 
-## Characters, words or something in between?
+## Characters, words, or something in between?
 
-There are two obvious options, and both have problems.
+There are two obvious choices, and both have problems.
 
-- **Characters.** The vocabulary is tiny (65 symbols for the Shakespeare text in the GPT note), but sequences are long. A context of 1,024 characters holds only a paragraph, and attention cost grows with sequence length.
-- **Words.** Sequences are short, but the vocabulary is huge and still incomplete. A simple word-level tokenizer built from the short story *The Verdict* (splitting on spaces and punctuation with a regex) had 1,130 entries. It failed on the very first word of "Hello, do you like tea?" because "Hello" never appears in the story. The usual patch is an `<|unk|>` token for unknown words, but then the model cannot see what the word was.
+- **Characters.** The vocabulary is tiny (65 symbols for the Shakespeare text in the GPT note), but sequences get long. 1,024 characters is only about a paragraph, and attention gets more expensive as sequences grow.
+- **Words.** Sequences are short, but the vocabulary is huge and still never complete. A simple word-level tokenizer built from the short story *The Verdict* (split on spaces and punctuation with a regex) had 1,130 entries. It broke on the very first word of "Hello, do you like tea?", because "Hello" never shows up in the story. The usual fix is an `<|unk|>` ("unknown") token, but then the model has no idea what the word actually was.
 
-**Subword tokenization** sits in between. Frequent words become single tokens, and rare words are split into a few known pieces. Byte-pair encoding is the most widely used way to learn those pieces.
+**Subword tokenization** is the middle ground. Common words get their own token, and rare words get split into a few known pieces. Byte-pair encoding is the most common way to learn those pieces.
 
 ## Start from bytes, not characters
 
-Unicode has well over 100,000 characters, far too many for a base vocabulary. Python strings are sequences of Unicode code points, and `str.encode("utf-8")` turns them into bytes. UTF-8 uses 1 byte for ASCII and 2 to 4 bytes for other characters. Working on bytes gives a fixed base vocabulary of exactly 256 symbols that can represent any text, emoji and all. The downside is that non-ASCII text becomes long, which is what the merges will fix.
+Unicode has well over 100,000 characters. That's way too many to use as a starting vocabulary. A Python string is a list of Unicode code points (one number per character), and `str.encode("utf-8")` turns it into bytes. UTF-8 uses 1 byte for plain ASCII and 2 to 4 bytes for everything else. So if you work with bytes, you start with exactly 256 symbols and can still write any text at all, emoji included. The catch is that non-ASCII text gets long. The merges below are what fix that.
 
 ```python
 text = "Ｕｎｉｃｏｄｅ! 😄 The very name strikes fear..."
 ids = list(text.encode("utf-8"))   # integers in 0..255
 ```
 
-## The BPE algorithm
+## How BPE works
 
-BPE is a compression algorithm run in a loop:
+BPE is basically a compression trick, run in a loop:
 
-1. Count every pair of adjacent tokens.
-2. Take the most frequent pair and give it a new token id (256, 257, ...).
-3. Replace every occurrence of that pair with the new id.
-4. Repeat until the vocabulary has the desired size.
+1. Count every pair of tokens that sit next to each other.
+2. Take the most common pair and give it a new token id (256, 257, ...).
+3. Replace every place that pair shows up with the new id.
+4. Repeat until the vocabulary is as big as you want.
 
 ```python
 def get_stats(ids):
@@ -89,13 +89,13 @@ def train_bpe(text, vocab_size):
     return merges
 ```
 
-On a short paragraph about Unicode (616 bytes), the first merge was `(101, 32)`, which is `"e "`: the letter e followed by a space, the most common ending in English. After 20 merges the paragraph was 451 tokens long. On a longer text, 20 merges shrank 24,532 bytes to 19,419 tokens, a compression ratio of 1.26. Merged tokens can be merged again: `(116, 104)` = `th`, and later `(th, "e ")` became one token for `"the "`.
+On a short paragraph about Unicode (616 bytes), the first merge was `(101, 32)`, which is `"e "`: the letter e followed by a space, the most common word ending in English. After 20 merges the paragraph was 451 tokens long. On a longer text, 20 merges shrank 24,532 bytes to 19,419 tokens, a compression ratio of 1.26. The fun part is that merged tokens can be merged again: `(116, 104)` = `th`, and later `(th, "e ")` became a single token for `"the "`.
 
-I first wrote `merge` with `enumerate` and `list.pop` inside the loop. It passed my unit tests, but changing a list while iterating over it is fragile. The `while` loop with an explicit index is clearer and safe.
+My first version of `merge` used `enumerate` and `list.pop` inside the loop. It passed my unit tests, but changing a list while you loop over it is asking for trouble. The `while` loop with an explicit index is clearer and safe.
 
 ## Encoding and decoding
 
-**Decoding** maps each id back to its bytes and joins them. Build the byte string for each merged id from its two parents, in the order the merges were created:
+**Decoding** is the easy direction: turn each id back into its bytes and glue them together. The bytes for a merged id are just the bytes of its two parents, built up in the order the merges were made:
 
 ```python
 def decode(ids, merges):
@@ -105,9 +105,9 @@ def decode(ids, merges):
     return b"".join(vocab[i] for i in ids).decode("utf-8", errors="replace")
 ```
 
-`errors="replace"` matters. Not every byte sequence is valid UTF-8; a lone byte 128, for example, is not. If the model emits such a sequence, strict decoding raises an error. Replacing invalid bytes with `�` is what real tokenizers do.
+Don't skip `errors="replace"`. Not every byte sequence is valid UTF-8 (a lone byte 128 isn't, for example). If the model spits out something like that, strict decoding crashes. Real tokenizers just swap the bad bytes for `�`.
 
-**Encoding** new text must apply the merges in the order they were learned, because later merges are built on earlier ones. At each step, find the adjacent pair with the lowest merge index and merge it; stop when no pair is in the merge table.
+**Encoding** new text is the trickier direction. You have to apply the merges in the same order they were learned, because later merges are built on top of earlier ones. So at each step, find the neighbouring pair with the lowest merge index and merge it. Stop when no pair is in the merge table.
 
 ```python
 def encode(text, merges):
@@ -123,11 +123,11 @@ def encode(text, merges):
 assert decode(encode("hello world!", merges), merges) == "hello world!"
 ```
 
-The tokenizer is a separate component from the LLM. It is trained once, on its own dataset (which may differ from the model's training data), and then frozen. The LLM only ever sees the token ids.
+Something I hadn't realised before: the tokenizer is a separate thing from the LLM. It's trained once, on its own data (which can be different from the model's training data), and then frozen. The LLM only ever sees the token ids.
 
-## GPT-style pre-splitting with a regex
+## GPT-style splitting with a regex first
 
-Plain BPE will happily merge across word boundaries and punctuation, producing tokens like `"dog."`, `"dog!"` and `"dog?"` as separate entries. GPT-2 first splits the text into chunks with a regular expression and runs BPE inside each chunk only:
+Plain BPE doesn't care about word boundaries or punctuation. It will happily make `"dog."`, `"dog!"` and `"dog?"` into three separate tokens. GPT-2 avoids this by first cutting the text into chunks with a regular expression, and then running BPE only inside each chunk:
 
 ```python
 import regex as re   # the third-party 'regex' module supports \p{L}
@@ -138,15 +138,15 @@ print(re.findall(gpt2pat, "Hello world! you're better"))
 # ['Hello', ' world', '!', ' you', "'re", ' better']
 ```
 
-The pattern keeps common English contractions apart, groups letters with an optional leading space, keeps numbers separate from letters, and handles runs of whitespace. Two quirks are worth knowing: the contraction rules only match lowercase apostrophe forms, so `'S` in all-caps text is split differently, and the rules are English-centric.
+In plain words, the pattern keeps common English contractions separate, groups letters together (with an optional space in front), keeps numbers apart from letters, and deals with runs of spaces. Two quirks I noticed: the contraction rules only match lowercase forms, so `'S` in all-caps text gets split differently, and the whole thing is built around English.
 
-GPT-4's tokenizer (`cl100k_base`) uses a refined pattern and about 100,000 tokens. One visible difference is whitespace: GPT-2 encodes `"   hello world !"` as `[220, 220, 23748, 995, 5145]`, spending a token on each leading space, while `cl100k_base` gives `[256, 24748, 1917, 758]` with the spaces grouped. That matters a lot for indented code.
+GPT-4's tokenizer (`cl100k_base`) uses an improved pattern and about 100,000 tokens. One easy-to-see difference is spaces: GPT-2 encodes `"   hello world !"` as `[220, 220, 23748, 995, 5145]`, using a token for each leading space, while `cl100k_base` gives `[256, 24748, 1917, 758]` with the spaces grouped. For indented code that's a big deal.
 
 ## Special tokens and the GPT-2 vocabulary
 
-GPT-2 has 50,257 tokens: 256 byte tokens, 50,000 learned merges, and one **special token**, `<|endoftext|>` (id 50256). Special tokens never come out of BPE; they are added to the vocabulary by hand and handled outside the merge loop. `<|endoftext|>` is placed between independent documents in the training data, so the model learns that what follows is unrelated to what came before. Chat models add more special tokens to mark the roles and turns of a conversation.
+GPT-2 has 50,257 tokens: 256 byte tokens, 50,000 learned merges, and one **special token**, `<|endoftext|>` (id 50256). Special tokens never come out of BPE. They're added to the vocabulary by hand and handled outside the merge loop. `<|endoftext|>` goes between unrelated documents in the training data, so the model learns that what comes next has nothing to do with what came before. Chat models add more special tokens to mark who's speaking and where each turn starts and ends.
 
-With `tiktoken`, special tokens must be allowed explicitly so that a user cannot inject them by typing the string:
+In `tiktoken` you have to allow special tokens explicitly. That way a user can't sneak one in just by typing the string:
 
 ```python
 import tiktoken
@@ -158,15 +158,15 @@ for t in enc.encode("Akwirw ier"):
     print(t, repr(enc.decode([t])))   # 'Ak', 'w', 'ir', 'w', ' ', 'ier'
 ```
 
-There is no `<|unk|>` token: a made-up word like "Akwirw" is simply broken into smaller known pieces, down to single bytes if necessary. That is the main practical advantage of byte-level BPE.
+There's no `<|unk|>` token at all. A made-up word like "Akwirw" just gets broken into smaller known pieces, down to single bytes if needed. For me that's the nicest thing about byte-level BPE: nothing is ever "unknown".
 
 ## Key takeaways
 
-- Tokenization trades vocabulary size against sequence length. Subwords sit between characters and words.
-- Byte-level BPE starts from the 256 UTF-8 bytes and repeatedly merges the most frequent adjacent pair into a new token.
-- Encoding must apply merges in the order they were learned; decoding concatenates bytes and must tolerate invalid UTF-8.
-- GPT tokenizers pre-split text with a regex so merges do not cross words, numbers and punctuation.
-- Special tokens such as `<|endoftext|>` are added outside BPE. Byte-level BPE never needs an unknown-word token.
+- Tokenization is a trade-off between vocabulary size and sequence length. Subwords sit between characters and words.
+- Byte-level BPE starts from the 256 UTF-8 bytes and keeps merging the most common neighbouring pair into a new token.
+- Encoding has to apply merges in the order they were learned. Decoding just joins bytes, but it has to cope with invalid UTF-8.
+- GPT tokenizers split text with a regex first, so merges don't cross words, numbers and punctuation.
+- Special tokens like `<|endoftext|>` are added by hand, outside BPE. Byte-level BPE never needs an "unknown word" token.
 
 ## Resources
 

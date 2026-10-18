@@ -4,7 +4,7 @@ slug: seq2seq-encoder-decoder
 date: 2025-04-15
 topic: NLP & LLMs
 tags: [seq2seq, encoder-decoder, gru, teacher-forcing, machine-translation, attention, pytorch]
-summary: "How an RNN encoder compresses a source sentence into a vector and an RNN decoder generates the target sentence from it, what teacher forcing and start/end tokens are for, and why the single-vector bottleneck led to attention."
+summary: "How an RNN encoder squeezes a sentence into one vector and an RNN decoder writes the translation from it, what teacher forcing and start/end tokens are for, and why that one-vector bottleneck led to attention."
 sources:
   - title: "Sequence to Sequence Learning with Neural Networks"
     author: "Ilya Sutskever, Oriol Vinyals, Quoc V. Le (2014)"
@@ -27,23 +27,23 @@ sources:
 status: draft
 ---
 
-Many language tasks map one sequence to another sequence of a different length: translation, summarization, question answering. A language model alone does not fit, because the output is conditioned on a separate input. The sequence-to-sequence (seq2seq) architecture from 2014 solves this with two networks: an **encoder** that reads the input and a **decoder** that writes the output. It was the state of the art for machine translation before transformers, and the transformer itself kept the encoder-decoder layout.
+Lots of language tasks turn one sequence into another sequence of a different length: translation, summarization, question answering. A plain language model doesn't quite fit, because the output has to depend on a separate input. The sequence-to-sequence (seq2seq) setup from 2014 handles this with two networks: an **encoder** that reads the input and a **decoder** that writes the output. It was the best approach for machine translation before transformers came along, and the original transformer kept the same encoder-decoder layout.
 
-## The architecture
+## How it's put together
 
-1. The **encoder** is an RNN (here a GRU) that reads the source tokens one by one. Its final hidden state is a fixed-size vector that should summarize the whole source sentence. It is often called the **context vector**.
-2. The **decoder** is a second RNN whose initial hidden state is that context vector. It generates the target sentence one token at a time, like a language model, feeding each produced token back in as the next input.
+1. The **encoder** is an RNN (here a GRU, a simpler cousin of the LSTM) that reads the source tokens one by one. Its last hidden state is a fixed-size vector that's supposed to sum up the whole source sentence. People often call it the **context vector**.
+2. The **decoder** is a second RNN that starts from that context vector as its hidden state. It writes the target sentence one token at a time, like a language model, feeding each token it produces back in as the next input.
 
 Two special tokens make this work:
 
-- `<sos>` (start of sequence) is the decoder's first input. It has to predict the first word from the context vector alone.
-- `<eos>` (end of sequence) is appended to every target sentence. When the decoder produces it, generation stops. Without it, the model has no way to decide how long the output should be.
+- `<sos>` (start of sequence) is the decoder's first input. From it, the decoder has to guess the first word using only the context vector.
+- `<eos>` (end of sequence) is added to the end of every target sentence. When the decoder outputs it, generation stops. Without it, the model has no way to know how long the output should be.
 
-My first notebook skipped both: it looked up `french_vocab["SOS"]`, which did not exist, and it had no end token, so it could never have stopped on its own. Both tokens have to be in the vocabulary from the start.
+My first notebook got both wrong: it looked up `french_vocab["SOS"]`, which didn't exist, and it had no end token, so it could never have stopped on its own. Both tokens need to be in the vocabulary from the start.
 
 ## A minimal implementation
 
-The toy task translates three English phrases into French. It is far too small to generalize, but it exercises every part of the pipeline.
+The toy task translates three English phrases into French. It's way too small to learn anything general, but it touches every part of the pipeline.
 
 ```python
 import torch, torch.nn as nn
@@ -91,11 +91,11 @@ class Decoder(nn.Module):
         return self.out(o[:, -1]), h              # logits: (1, vocab)
 ```
 
-The GRU processes the whole source sentence in one call. The decoder is called once per output token because each step depends on the previous output.
+The encoder's GRU reads the whole source sentence in one call. The decoder has to be called once per output token, because each step depends on what came out the step before.
 
 ## Training with teacher forcing
 
-During training we know the correct target sentence. **Teacher forcing** feeds the decoder the *correct* previous token at each step, not the token it just predicted. This keeps early mistakes from derailing the rest of the sequence and makes training much faster and more stable.
+During training we know the right target sentence. **Teacher forcing** means feeding the decoder the *correct* previous token at each step, not the token it just guessed. That way one early mistake doesn't throw off the rest of the sentence, and training gets much faster and more stable.
 
 ```python
 enc, dec = Encoder(len(src_vocab), 32), Decoder(len(tgt_vocab), 32)
@@ -117,13 +117,13 @@ for epoch in range(200):
         opt.step()
 ```
 
-The single loss trains both networks: the gradient flows from the decoder's predictions back through the context vector into the encoder. My original version used `LogSoftmax` plus `NLLLoss`; that is mathematically the same as `CrossEntropyLoss` on raw logits.
+What clicked for me here is that one loss trains both networks. The gradient flows from the decoder's predictions back through the context vector into the encoder. My original version used `LogSoftmax` plus `NLLLoss`, which is mathematically the same as `CrossEntropyLoss` on raw logits.
 
-Teacher forcing has a cost called **exposure bias**: at test time the decoder must consume its own predictions, which it never did during training. A common compromise, scheduled sampling, mixes in the model's own predictions with growing probability as training goes on.
+Teacher forcing has a downside called **exposure bias**: at test time the decoder has to work from its own guesses, which it never had to do during training. A common middle ground, scheduled sampling, mixes in the model's own guesses more and more often as training goes on.
 
 ## Decoding
 
-At inference time there is no target, so the decoder feeds its own output back in. The simplest strategy is **greedy decoding**: always take the most likely token, stop at `<eos>` or a length limit.
+When actually using the model there's no target, so the decoder feeds its own output back in. The simplest way is **greedy decoding**: always take the most likely token, and stop at `<eos>` or at a length limit.
 
 ```python
 @torch.no_grad()
@@ -142,28 +142,28 @@ def translate(sentence, max_len=10):
 print(translate("how are you"))   # comment allez vous
 ```
 
-Greedy decoding can commit early to a word that leads nowhere. **Beam search** keeps the $k$ best partial translations at every step and usually finds better outputs.
+Greedy decoding can lock in a word early that leads nowhere. **Beam search** keeps the $k$ best partial translations at every step and usually ends up with better results.
 
-## The bottleneck, and the step to attention
+## The bottleneck, and how it led to attention
 
-The whole source sentence has to fit into one hidden vector of fixed size. For a three-word phrase that is fine. For a 50-word sentence, the decoder must recover every detail from the same small vector, and translation quality falls off sharply as sentences get longer.
+The whole source sentence has to fit into one hidden vector of fixed size. For a three-word phrase that's fine. For a 50-word sentence, the decoder has to dig every detail out of the same small vector, and translation quality drops fast as sentences get longer.
 
-Bahdanau, Cho and Bengio (2014) removed the bottleneck by keeping **all** encoder hidden states $h_1, \dots, h_S$ (the `outputs` tensor the encoder above already returns) and letting the decoder look back at them at every step. At step $t$ the decoder scores how relevant each encoder state is to its current state $s_{t-1}$, turns the scores into weights with a softmax, and builds its own context vector as a weighted sum:
+Bahdanau, Cho and Bengio (2014) got rid of the bottleneck. They kept **all** the encoder hidden states $h_1, \dots, h_S$ (the `outputs` tensor the encoder above already returns) and let the decoder look back at them at every step. At step $t$, the decoder scores how relevant each encoder state is to its current state $s_{t-1}$, turns the scores into weights with a softmax, and builds its own context vector as a weighted sum:
 
 $$
 \alpha_{t,i} = \frac{\exp(\operatorname{score}(s_{t-1}, h_i))}{\sum_{j=1}^{S} \exp(\operatorname{score}(s_{t-1}, h_j))}, \qquad
 c_t = \sum_{i=1}^{S} \alpha_{t,i}\, h_i .
 $$
 
-The weights $\alpha_{t,i}$ act like a soft alignment between target and source words. This "look back and take a weighted average" operation is attention. The transformer took the next step: drop the RNNs entirely and build the whole model from attention. That story continues in the [self-attention note](/notes/self-attention/).
+The way I think about it: the weights $\alpha_{t,i}$ are a soft matching between target words and source words. This "look back and take a weighted average" step is attention. The transformer went one step further: drop the RNNs completely and build the whole model out of attention. That story continues in the [self-attention note](/notes/self-attention/).
 
 ## Key takeaways
 
-- A seq2seq model has an encoder RNN that summarizes the source and a decoder RNN that generates the target, conditioned on that summary.
-- `<sos>` starts decoding and `<eos>` ends it; both must be in the target vocabulary.
-- Teacher forcing feeds the true previous token during training. It speeds up learning but creates a train/test mismatch (exposure bias).
-- Greedy decoding is simple; beam search explores several candidates and usually translates better.
-- Squeezing the source into one vector is a bottleneck for long inputs. Attention fixes it by letting the decoder look at all encoder states.
+- A seq2seq model has an encoder RNN that sums up the source and a decoder RNN that writes the target based on that summary.
+- `<sos>` starts decoding and `<eos>` ends it. Both have to be in the target vocabulary.
+- Teacher forcing feeds the true previous token during training. It speeds up learning but means training and testing don't match (exposure bias).
+- Greedy decoding is simple. Beam search tries several candidates and usually translates better.
+- Squeezing the source into one vector is a bottleneck for long inputs. Attention fixes it by letting the decoder look at all the encoder states.
 
 ## Resources
 

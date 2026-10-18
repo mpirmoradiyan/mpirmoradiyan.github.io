@@ -4,7 +4,7 @@ slug: tiling-large-images-for-detection
 date: 2024-07-29
 topic: Computer Vision
 tags: [tiling, slicing, sahi, object-detection, instance-segmentation, small-objects, shapely, numpy]
-summary: "How to cut a huge image into overlapping tiles, how to carry box and polygon annotations into each tile correctly (including objects cut by the tile edge), and how to stitch tile predictions back into one clean result."
+summary: "How to cut a huge image into overlapping tiles, carry box and polygon labels into each tile correctly (including objects cut by the tile edge), and stitch the tile predictions back into one clean result."
 sources:
   - title: "Slicing Aided Hyper Inference and Fine-tuning for Small Object Detection (SAHI)"
     author: "Fatih Cagatay Akyon, Sinan Onur Altinuc, Alptekin Temizel"
@@ -31,20 +31,20 @@ sources:
 status: draft
 ---
 
-Aerial photos, satellite scenes, microscopy slides and scanned documents are often 5,000 to 50,000 pixels on a side, while detectors are trained on inputs of roughly 512 to 1,333 pixels. Shrinking the whole image to fit turns a 30-pixel object into a 3-pixel smudge that no feature map can resolve. The standard alternative is to cut the image into tiles at (or near) full resolution, train and predict on the tiles, and stitch the results. The idea is simple. The details at the tile borders are where the bugs hide: objects cut in half, polygons clipped wrongly, and the same object detected twice.
+Aerial photos, satellite scenes, microscopy slides and scanned documents are often 5,000 to 50,000 pixels on a side. Detectors, on the other hand, are trained on inputs of roughly 512 to 1,333 pixels. If you just shrink the whole image to fit, a 30-pixel object turns into a 3-pixel smudge that no feature map can pick up. The usual fix is to cut the image into tiles at (or close to) full resolution, train and predict on the tiles, and stitch the results back together. The idea is simple. The bugs hide at the tile borders: objects cut in half, polygons clipped wrongly, and the same object detected twice.
 
 ## Why not just resize?
 
-A detector's finest feature map usually has stride 4 or 8, and anchors or detection points need an object to span several cells (see [designing anchors](/notes/designing-anchors-for-your-dataset/) for why roughly 6× the stride is needed). Downscaling a $10000 \times 10000$ image to $1000 \times 1000$ divides every object side by 10. Objects that were comfortably detectable become smaller than one cell. Memory is the other limit: activations grow with the number of pixels, so feeding the full-resolution image at once rarely fits on a GPU.
+A detector's finest feature map usually has stride 4 or 8 (one cell per 4 or 8 input pixels), and anchors or detection points need an object to cover several cells (see [designing anchors](/notes/designing-anchors-for-your-dataset/) for why you need roughly 6× the stride). Shrinking a $10000 \times 10000$ image to $1000 \times 1000$ divides every object side by 10. Objects that were easy to detect end up smaller than one cell. Memory is the other limit. Activations grow with the number of pixels, so the full-resolution image in one go rarely fits on a GPU.
 
-Tiling keeps the native resolution and bounds the memory per forward pass. The costs are more forward passes, lost context beyond the tile border, and the extra work of handling objects that cross borders.
+Tiling keeps the original resolution and caps the memory per forward pass. What you pay: more forward passes, no context beyond the tile border, and extra work for objects that cross borders.
 
 ## Laying out the tiles
 
-Choose a tile size $T$ (often the model's input size) and an overlap $O$ in pixels. Tiles start every $T - O$ pixels. Two details are easy to get wrong:
+Pick a tile size $T$ (often the model's input size) and an overlap $O$ in pixels. A new tile starts every $T - O$ pixels. Two things are easy to get wrong:
 
-- **The last tile.** If $(L - T)$ is not a multiple of the step, a naive loop either misses the right/bottom strip or produces a smaller last tile. Shifting the last tile back so it ends exactly at the image edge keeps every tile full-size, at the cost of a bit more overlap there.
-- **Images smaller than one tile.** Pad them to $T$ instead of producing a ragged tile.
+- **The last tile.** If $(L - T)$ isn't a multiple of the step, a naive loop either misses the right/bottom strip or makes a smaller last tile. Shifting the last tile back so it ends exactly at the image edge keeps every tile full-size. You just get a bit more overlap there.
+- **Images smaller than one tile.** Pad them up to $T$ instead of making a ragged tile.
 
 ```python
 import numpy as np
@@ -74,13 +74,13 @@ print(len(tiles), "tiles, first three:", tiles[:3])
 
 ![Left: a synthetic 1000 by 700 image with a 5 by 4 grid of 256-pixel tiles outlined, adjacent tiles overlapping by 64 pixels and the last column and row shifted back to the image edge. Right: the number of tiles covering each pixel, 1 in tile interiors, 2 in overlap strips, 4 where strips cross, and more along the bottom where the shifted last row overlaps the row above it heavily](fig-tile-grid.png)
 
-**How much overlap?** If every object you care about must appear whole in at least one tile, the overlap must be at least the size of the largest such object. More overlap means more tiles: the count grows like $\frac{W}{T-O} \cdot \frac{H}{T-O}$, so going from 10% to 50% overlap roughly triples the work. Overlap also gives each pixel a second view with more context, which helps at inference time.
+**How much overlap?** If every object you care about has to appear whole in at least one tile, the overlap must be at least the size of the biggest such object. More overlap means more tiles. The count grows like $\frac{W}{T-O} \cdot \frac{H}{T-O}$, so going from 10% to 50% overlap roughly triples the work. On the plus side, overlap gives each pixel a second look with more context, which helps at inference time.
 
-**Empty tiles.** Tiles that are pure padding or "no data" (black borders of a satellite scene, for example) can be skipped. Tiles with real content but no objects are useful negatives for training. Keep some of them so the model learns what background looks like, but you may subsample them if they dominate.
+**Empty tiles.** Tiles that are pure padding or "no data" (like the black borders of a satellite scene) can be skipped. Tiles with real content but no objects are different: they're useful negatives for training. Keep some so the model learns what background looks like, but you can subsample them if there are too many.
 
 ## Carrying boxes into a tile
 
-For each tile, every annotation must be shifted into tile coordinates and cut to the tile. For boxes, cutting is just clipping the corners. The real decision is **which partial objects to keep**. A common rule keeps a clipped box only if a large enough fraction of the original area is still visible and the remaining box is not a sliver.
+For each tile, every annotation has to be shifted into tile coordinates and cut to the tile. For boxes, cutting just means clipping the corners. The real question is **which partial objects to keep**. A common rule: keep a clipped box only if enough of the original area is still visible and what's left isn't a thin sliver.
 
 ```python
 def boxes_for_tile(boxes, tile, min_visible=0.5, min_side=4):
@@ -108,15 +108,15 @@ visible fraction: [1.   0.37 0.28 1.  ]
  [ 10.  10.  30.  30.]]
 ```
 
-There is no free choice here, only trade-offs:
+There's no perfect choice here, only trade-offs. This part took me a while to really get:
 
-- **Drop small fragments** (as above). The model is not asked to detect a sliver it cannot recognise. But the dropped object's pixels are still in the tile, now with no label, so the loss treats them as background. The model is punished for firing on a real object.
-- **Keep every fragment.** No false "background" labels, but the model learns to output partial boxes, and stitching must then merge them with the full detections from neighbouring tiles.
-- **Mark dropped fragments as "ignore" regions** (or crowd boxes). Anchors or points that overlap them get no loss in either direction. This is the cleanest option when your training code supports ignore regions.
+- **Drop small fragments** (like above). The model isn't asked to detect a sliver it can't recognise. But the dropped object's pixels are still in the tile, now with no label, so the loss treats them as background. The model gets punished for firing on a real object.
+- **Keep every fragment.** No wrong "background" labels, but the model learns to output partial boxes, and stitching then has to merge them with the full detections from neighbouring tiles.
+- **Mark dropped fragments as "ignore" regions** (or crowd boxes). Anchors or points that overlap them get no loss either way. This is the cleanest option if your training code supports ignore regions.
 
 ## Carrying polygons into a tile: intersect, don't clamp
 
-For instance masks stored as polygons, it is tempting to shift the vertices and clamp each coordinate into the tile. That is only correct when the polygon's edges cross the border at right angles. For any slanted edge, clamping moves vertices sideways, so the clamped polygon covers pixels outside the object and misses pixels inside it. The correct operation is a geometric intersection of the polygon with the tile rectangle, which a library like Shapely does exactly.
+For instance masks stored as polygons, it's tempting to shift the vertices and clamp each coordinate into the tile. That's only right when the polygon's edges cross the border at right angles. For any slanted edge, clamping slides the vertices sideways, so the clamped polygon covers pixels outside the object and misses pixels inside it. What you actually want is the geometric intersection of the polygon with the tile rectangle, and a library like Shapely does that exactly.
 
 ```python
 from shapely.geometry import Polygon, box as tile_box
@@ -149,15 +149,15 @@ clamped area 2520, true area 2640, clamped area outside the object 1420
 pieces after the cut: 2
 ```
 
-For the thin diagonal object, more than half of the clamped polygon lies outside the object. Two more details from the example: a cut can split one object into several pieces (the U-shape becomes two separate parts, which together still form one instance mask), and polygons with holes need their interiors handled too (the snippet keeps only exteriors for brevity). If your masks are stored as rasters instead of polygons, none of this is needed: cropping the mask array with the same slice as the image is exact.
+For the thin diagonal object, more than half of the clamped polygon is outside the object. The area numbers look close, which is what makes this bug sneaky. Two more things from the example. A cut can split one object into several pieces (the U-shape becomes two separate parts, which together are still one instance mask). And polygons with holes need their interiors handled too (the snippet keeps only exteriors to stay short). If your masks are stored as rasters instead of polygons, you don't need any of this: cropping the mask array with the same slice as the image is exact.
 
 ## Stitching predictions back together
 
 At inference, run the model on every tile, then:
 
 1. **Shift** each prediction by its tile origin $(x_0, y_0)$ into full-image coordinates.
-2. **Drop predictions that touch an inner tile border.** A box touching a border that is not also the image border is probably a cut object. If the overlap is at least the object size, a neighbouring tile sees the whole object.
-3. **Merge duplicates** across tiles. Ordinary NMS with IoU fails for a partial box inside a full box: their IoU can be low even though they are the same object. Intersection over the *smaller* box (IoS) catches this case. SAHI uses this kind of matching and can merge matched boxes (non-maximum merging) instead of deleting them.
+2. **Drop predictions that touch an inner tile border.** A box touching a border that isn't also the image border is probably a cut object. If the overlap is at least the object size, a neighbouring tile sees the whole thing.
+3. **Merge duplicates** across tiles. Normal NMS (non-maximum suppression) with IoU fails when a partial box sits inside a full box: their IoU can be low even though they're the same object. Intersection over the *smaller* box (IoS) catches this case. SAHI uses this kind of matching and can merge matched boxes (non-maximum merging) instead of deleting them.
 
 ```python
 def area(b):
@@ -194,9 +194,9 @@ print(all_boxes[suppress_by_ios(all_boxes, all_scores)])      # step 3
 [[230.  40. 290.  90.]]
 ```
 
-The border filter alone removed the cut copy here; the IoS step is the safety net for objects larger than the overlap, which no tile sees whole.
+Here the border filter alone already removed the cut copy. The IoS step is the safety net for objects bigger than the overlap, which no tile sees whole.
 
-**Dense outputs** (semantic masks, heatmaps) are stitched differently: add each tile's per-pixel probabilities into a full-size array, count how many tiles covered each pixel (the right panel of the figure above), and divide. Predictions near tile borders are less reliable because the network sees less context there, so a weight that fades toward the tile edges (instead of a flat 1) usually gives smoother seams. U-Net's "overlap-tile" strategy is the classic version of this idea.
+**Dense outputs** (semantic masks, heatmaps) get stitched differently. Add each tile's per-pixel probabilities into a full-size array, count how many tiles covered each pixel (the right panel of the figure above), and divide. Predictions near tile borders are less reliable because the network sees less context there, so a weight that fades toward the tile edges (instead of a flat 1) usually gives smoother seams. U-Net's "overlap-tile" strategy is the classic version of this.
 
 ```python
 def stitch_dense(tile_probs, tiles, img_h, img_w):
@@ -215,17 +215,17 @@ print(full.shape, "values in overlaps:", np.unique(full.round(2)))
 (700, 1000) values in overlaps: [0.   0.33 0.5  0.67 1.  ]
 ```
 
-## Training on tiles versus inferring on tiles
+## Tiles for training vs. tiles for inference
 
-The two sides do not have to use the same layout. For training, random crops of tile size (with the same clipping rules) give more variety than a fixed grid, and they let the model see objects at every position relative to the border. For inference, a fixed overlapping grid guarantees coverage. The SAHI paper also adds one full-image, downscaled pass at inference, so large objects that no tile contains whole are still detected. Whatever you do, keep the pixel scale the same between training and inference: a model trained on full-resolution tiles should not be run on a downscaled image.
+The two sides don't have to use the same layout. For training, random crops of tile size (with the same clipping rules) give more variety than a fixed grid, and the model gets to see objects at every position relative to the border. For inference, a fixed overlapping grid makes sure everything is covered. The SAHI paper also adds one full-image, downscaled pass at inference, so large objects that no tile holds whole still get detected. Whatever you do, keep the pixel scale the same between training and inference: a model trained on full-resolution tiles shouldn't be run on a downscaled image.
 
 ## Key takeaways
 
-- Tile instead of downscaling when objects would shrink below a few feature-map cells; keep every tile full-size by shifting the last one back to the edge.
-- Overlap should be at least the size of the largest object that must appear whole; tile count grows as $1/(T-O)^2$.
-- Partial objects need an explicit policy: drop below a visible fraction, keep all, or mark as ignore. Dropping silently teaches "object = background".
-- Clip polygons by geometric intersection, never by clamping coordinates; a cut can split one instance into several pieces.
-- Stitch boxes by shifting, dropping detections on inner borders, then suppressing by intersection over the smaller box; stitch dense maps by (weighted) averaging.
+- Tile instead of shrinking when objects would end up smaller than a few feature-map cells. Keep every tile full-size by shifting the last one back to the edge.
+- Overlap should be at least the size of the biggest object that has to appear whole. The tile count grows as $1/(T-O)^2$.
+- Partial objects need a clear rule: drop below a visible fraction, keep all, or mark as ignore. Dropping them silently teaches the model "object = background".
+- Clip polygons with a geometric intersection, never by clamping coordinates. A cut can split one instance into several pieces.
+- Stitch boxes by shifting, dropping detections on inner borders, then suppressing by intersection over the smaller box. Stitch dense maps by (weighted) averaging.
 
 ## Resources
 

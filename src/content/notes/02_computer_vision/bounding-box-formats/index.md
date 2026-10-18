@@ -4,7 +4,7 @@ slug: bounding-box-formats
 date: 2023-03-06
 topic: Computer Vision
 tags: [object-detection, bounding-boxes, annotation-formats, yolo, pascal-voc, coco, letterbox, numpy]
-summary: "What the common bounding-box formats store, how to convert between them, how boxes must change when an image is resized or letterboxed, and the off-by-one and normalisation mistakes that silently break a detection dataset."
+summary: "What the common box formats store, how to convert between them, what happens to boxes when you resize or letterbox an image, and the small mistakes that quietly break a detection dataset."
 sources:
   - title: "The PASCAL Visual Object Classes (VOC) Challenge"
     author: "Mark Everingham, Luc Van Gool, Christopher Williams, John Winn, Andrew Zisserman"
@@ -31,11 +31,11 @@ sources:
 status: draft
 ---
 
-A bounding box is just four numbers, but there are at least five common ways to write those four numbers down. Annotation tools, datasets, training code and evaluation code rarely agree. A box in the wrong format does not crash anything: the model trains on shifted or stretched targets, or the evaluation reports a mAP near zero, and you start debugging the model instead of the data. In early 2023 I wrote small converters between annotation exports, Pascal VOC XML and YOLO text files, plus scripts that drew the boxes back on the image to check them. This note collects what those exercises taught me, with synthetic examples.
+A bounding box is just four numbers. The annoying part is that there are at least five common ways to write those four numbers down, and annotation tools, datasets, training code and evaluation code rarely agree. A box in the wrong format doesn't crash anything. The model just trains on shifted or stretched targets, or the evaluation says your mAP is close to zero, and you end up debugging the model when the problem is the data. In early 2023 I wrote small converters between annotation exports, Pascal VOC XML and YOLO text files, plus scripts that drew the boxes back on the image so I could check them. These are the things I picked up from that, shown with made-up examples.
 
 ## The formats
 
-All formats put the origin at the **top-left** corner of the image, with $x$ to the right and $y$ **down**.
+Every format puts the origin at the **top-left** corner of the image, with $x$ going right and $y$ going **down**.
 
 | Name | Four numbers | Units | Typical home |
 |---|---|---|---|
@@ -44,11 +44,11 @@ All formats put the origin at the **top-left** corner of the image, with $x$ to 
 | `cxcywh` | centre $c_x, c_y$, width, height | pixels | many detector heads, DETR |
 | YOLO | `cxcywh` divided by image width and height | fractions in $[0, 1]$ | YOLO `.txt` label files |
 
-The [mean average precision](/notes/mean-average-precision/) note has a short version of this table. Here we go into the details that cause bugs.
+The [mean average precision](/notes/mean-average-precision/) note has a short version of this table. This note is about the little details that cause bugs.
 
-## Conversions
+## Converting between them
 
-Conversions are simple arithmetic. Write them once, vectorised over an $(N, 4)$ array, and test them with round trips.
+The conversions themselves are just simple arithmetic. Write them once so they work on a whole $(N, 4)$ array at a time, and test them with round trips (convert there and back, and check you get the same boxes).
 
 ```python
 import numpy as np
@@ -71,13 +71,13 @@ assert np.allclose(from_yolo(to_yolo(boxes, W, H), W, H), boxes)
 assert np.allclose(xywh_to_xyxy(xyxy_to_xywh(boxes)), boxes)
 ```
 
-Notice that $x$ values are divided by the image **width** and $y$ values by the **height**. On a square image swapping them does nothing, so the bug hides until the first non-square image.
+Note that $x$ values get divided by the image **width** and $y$ values by the **height**. On a square image, mixing them up changes nothing, so the bug stays hidden until the first non-square image shows up.
 
 ## The file formats
 
-**YOLO text.** One `.txt` per image with the same base name, one line per object: `class cx cy w h`. Class indices start at 0 and the class names live in a separate file. An image with no objects should still get an empty `.txt` file, so the loader knows it is a true negative and not a missing label.
+**YOLO text.** One `.txt` per image with the same base name, and one line per object: `class cx cy w h`. Class numbers start at 0, and the class names live in a separate file. An image with no objects should still get an empty `.txt` file. That way the loader knows the image really has nothing in it, rather than thinking the label is missing.
 
-**Pascal VOC XML.** One XML file per image. It stores the image `size`, and for each `object` a `name`, flags such as `difficult` and `truncated`, and a `bndbox` with `xmin`, `ymin`, `xmax`, `ymax`. VOC coordinates are **1-based and inclusive**: a box covering the first 10 pixel columns is written `xmin=1, xmax=10`. To turn that into continuous 0-based edges, subtract 1 from the minimum values only:
+**Pascal VOC XML.** One XML file per image. It stores the image `size`, and for each `object` a `name`, flags like `difficult` and `truncated`, and a `bndbox` with `xmin`, `ymin`, `xmax`, `ymax`. This tripped me up: VOC coordinates are **1-based and inclusive**. A box covering the first 10 pixel columns is written `xmin=1, xmax=10`. To turn that into continuous 0-based edges, subtract 1 from the min values only:
 
 ```python
 import xml.etree.ElementTree as ET
@@ -93,9 +93,9 @@ def read_voc(text):
     return W, H, objs
 ```
 
-Many tools write VOC files with 0-based values anyway, so check a few boxes against the image before trusting either convention. Also read the values with `float`, because some exporters write decimals.
+But lots of tools write VOC files with 0-based values anyway, so check a few boxes against the image before you trust either one. Also read the values with `float`, because some exporters write decimals.
 
-**COCO JSON.** One file for the whole dataset, with three main lists: `images` (`id`, `file_name`, `width`, `height`), `annotations` (`image_id`, `category_id`, `bbox` as `[x, y, w, h]` in float pixels, `area`, `iscrowd`) and `categories`. COCO uses continuous coordinates: $(0, 0)$ is the top-left corner of the top-left pixel. Category ids start at 1 and may have gaps (the official 80 classes use ids up to 90), so build an explicit mapping to contiguous 0-based indices when converting to YOLO:
+**COCO JSON.** One file for the whole dataset, with three main lists: `images` (`id`, `file_name`, `width`, `height`), `annotations` (`image_id`, `category_id`, `bbox` as `[x, y, w, h]` in float pixels, `area`, `iscrowd`) and `categories`. COCO uses continuous coordinates, so $(0, 0)$ is the top-left corner of the top-left pixel. Category ids start at 1 and can have gaps (the official 80 classes use ids up to 90). So when converting to YOLO, build an explicit mapping to 0-based numbers with no gaps:
 
 ```python
 cats = [{"id": 3, "name": "car"}, {"id": 7, "name": "bus"}]
@@ -105,13 +105,13 @@ cx, cy, w, h = to_yolo(xywh_to_xyxy(np.array([ann["bbox"]])), 640, 400)[0]
 print(f"{cat_to_idx[ann['category_id']]} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}")  # 0 0.312500 0.375000 ...
 ```
 
-Also note that COCO's `area` is the segmentation mask area, not $w \times h$. The COCO evaluator uses it to sort objects into small, medium and large.
+One more surprise: COCO's `area` is the area of the segmentation mask, not $w \times h$. The COCO evaluator uses it to sort objects into small, medium and large.
 
 ## Boxes after resizing
 
-When the image is resized from $(W, H)$ to $(W', H')$, every $x$ scales by $s_x = W'/W$ and every $y$ by $s_y = H'/H$. Normalised YOLO boxes need no change at all, which is one reason the format is popular.
+If you resize the image from $(W, H)$ to $(W', H')$, every $x$ gets multiplied by $s_x = W'/W$ and every $y$ by $s_y = H'/H$. Normalised YOLO boxes don't need any change at all, which is one reason people like that format.
 
-Most detectors instead **letterbox**: scale by one factor $r = \min(S/W, S/H)$ so the aspect ratio is kept, then pad to an $S \times S$ square. Boxes then go through $x' = r x + p_x$ and $y' = r y + p_y$, where $p_x, p_y$ are the padding offsets. Predictions must go back through the inverse before they are compared with original-resolution labels or drawn on the original image.
+Most detectors **letterbox** instead. That means: scale by one factor $r = \min(S/W, S/H)$ so the shape stays the same, then pad to an $S \times S$ square. Boxes then go through $x' = r x + p_x$ and $y' = r y + p_y$, where $p_x, p_y$ are the padding offsets. Before you compare predictions with the original labels, or draw them on the original image, you have to run them back through the inverse.
 
 ```python
 def letterbox_params(old_wh, size):
@@ -127,13 +127,13 @@ lb = letterbox_boxes(boxes, r, px, py)
 assert np.allclose(unletterbox_boxes(lb, r, px, py), boxes)
 ```
 
-If the padding is placed only at the bottom and right instead of split evenly, $p_x = p_y = 0$ and only the scale applies. The code that pads the image and the code that moves the boxes must agree on this.
+If the padding only goes on the bottom and right instead of being split evenly, then $p_x = p_y = 0$ and only the scale matters. Whatever you choose, the code that pads the image and the code that moves the boxes have to agree.
 
 ![Three panels with the same synthetic image: the 640 by 400 original with correct boxes; the image letterboxed to 512 by 512 with grey bars above and below and boxes that still fit; and a plain resize to 512 by 512 where the boxes were scaled with width and height swapped, so one box floats over empty background and the other is pushed off the image.](fig-letterbox-and-swap-bug.png)
 
 ## Clipping
 
-Annotation tools often allow boxes that extend past the border, and augmentations (crops, shifts, rotations) push boxes out too. Clip $x$ to $[0, W]$ and $y$ to $[0, H]$, then drop boxes that became too thin:
+Annotation tools often let boxes go past the image border, and augmentations (crops, shifts, rotations) push boxes out too. So clip $x$ to $[0, W]$ and $y$ to $[0, H]$, then drop boxes that got too thin:
 
 ```python
 def clip_boxes(b, img_w, img_h, min_size=1):
@@ -144,11 +144,11 @@ def clip_boxes(b, img_w, img_h, min_size=1):
     return b[keep]
 ```
 
-Clip *before* converting to YOLO, otherwise a centre near the border with a large width gives normalised corners outside $[0, 1]$, which some loaders reject and others silently accept. For boxes cut by a tile or crop border, see [tiling large images for detection](/notes/tiling-large-images-for-detection/).
+Clip *before* converting to YOLO. Otherwise a centre near the border with a big width gives normalised corners outside $[0, 1]$, and some loaders reject that while others quietly accept it. For boxes that get cut by a tile or crop border, see [tiling large images for detection](/notes/tiling-large-images-for-detection/).
 
 ## Rotated (oriented) boxes
 
-Aerial images, text and ships are poorly fit by axis-aligned boxes. An **oriented bounding box** adds an angle: $(c_x, c_y, w, h, \theta)$. Datasets such as DOTA instead store the four corner points. To get the corners, rotate the corners of an axis-aligned box centred at the origin, then shift:
+Straight, axis-aligned boxes don't fit things like aerial images, text or ships very well. An **oriented bounding box** adds an angle: $(c_x, c_y, w, h, \theta)$. Some datasets, like DOTA, store the four corner points instead. To get the corners, take the corners of a straight box centred at the origin, rotate them, then shift them into place:
 
 ```python
 def obb_corners(cx, cy, w, h, theta):           # theta in radians
@@ -160,26 +160,26 @@ pts = obb_corners(200, 150, 120, 40, np.deg2rad(30))
 print(np.r_[pts.min(0), pts.max(0)].round(1))   # enclosing axis-aligned box: [138. 102.7 262. 197.3]
 ```
 
-Because $y$ points down, a positive $\theta$ looks **clockwise** on screen. Angle conventions differ between libraries: degrees or radians, ranges of $[0, 90)$, $[-90, 0)$ or $[-180, 180)$, and whether $w$ is always the longer side. Check the convention before mixing tools. The same rotation applies when scaling or rotating any polygon about its centroid; see [geometric transformations](/notes/geometric-transformations-and-homographies/).
+Because $y$ points down, a positive $\theta$ looks **clockwise** on screen. Libraries don't agree on angles either: degrees or radians, ranges of $[0, 90)$, $[-90, 0)$ or $[-180, 180)$, and whether $w$ is always the longer side. Check which one a tool uses before mixing tools. The same rotation works for scaling or rotating any polygon around its centre; see [geometric transformations](/notes/geometric-transformations-and-homographies/).
 
-## A checklist of common bugs
+## Bugs to watch for
 
-- **$(H, W)$ versus $(W, H)$.** NumPy's `img.shape` is `(height, width, channels)`, while PIL's `Image.size` and `resize()` use `(width, height)`. Taking the scale factors from one and the target size from the other is the bug in the right panel above. It is invisible on square images.
-- **Wrong normaliser.** Normalising by the original size after resizing the image, or by the model input size instead of the image size.
-- **Off-by-one.** Mixing VOC's 1-based inclusive pixels with 0-based continuous coordinates shifts every box by one pixel and adds one pixel to widths. Small for big objects, a real IoU loss for 10-pixel objects.
-- **Early integer rounding.** Casting with `int()` truncates towards zero. Keep floats until you draw or write the final file.
-- **Horizontal flip.** $x'_{\min} = W - x_{\max}$ and $x'_{\max} = W - x_{\min}$. Forgetting to swap gives negative widths.
-- **Silent drops.** Boxes with zero or negative width, labels without images, and images without label files. Count objects before and after every conversion.
+- **$(H, W)$ versus $(W, H)$.** NumPy's `img.shape` is `(height, width, channels)`, but PIL's `Image.size` and `resize()` use `(width, height)`. Taking the scale factors from one and the target size from the other is exactly the bug in the right panel above. You can't see it on square images.
+- **Wrong normaliser.** Normalising by the original size after you've resized the image, or by the model input size instead of the image size.
+- **Off-by-one.** Mixing VOC's 1-based inclusive pixels with 0-based continuous coordinates shifts every box by one pixel and makes widths one pixel bigger. That's nothing for big objects, but for 10-pixel objects it really hurts IoU.
+- **Rounding to integers too early.** `int()` cuts off towards zero. Keep floats until you draw or write the final file.
+- **Horizontal flip.** $x'_{\min} = W - x_{\max}$ and $x'_{\max} = W - x_{\min}$. If you forget to swap, you get negative widths.
+- **Things quietly disappearing.** Boxes with zero or negative width, labels without images, and images without label files. Count objects before and after every conversion.
 
-The cheapest test is visual: after every conversion, draw a few random samples back onto their images and look.
+The cheapest test is just looking: after every conversion, draw a few random samples back on their images and check them by eye.
 
 ## Key takeaways
 
-- Know which of `xyxy`, `xywh`, `cxcywh` and normalised YOLO each tool expects, and convert everything to one internal format (corners in float pixels is a good choice).
-- Divide $x$ by width and $y$ by height; NumPy shapes are $(H, W)$ and PIL sizes are $(W, H)$.
-- VOC is 1-based inclusive, COCO is continuous with gappy 1-based category ids, YOLO class ids are 0-based.
-- Resizing scales boxes; letterboxing scales and shifts them, and predictions must be mapped back with the inverse.
-- Clip, filter degenerate boxes, round-trip test the converters, and always draw the result.
+- Know which of `xyxy`, `xywh`, `cxcywh` and normalised YOLO each tool wants, and convert everything to one format inside your own code (corners in float pixels works well).
+- Divide $x$ by width and $y$ by height. NumPy shapes are $(H, W)$ and PIL sizes are $(W, H)$.
+- VOC is 1-based inclusive. COCO is continuous, with 1-based category ids that have gaps. YOLO class ids are 0-based.
+- Resizing scales boxes. Letterboxing scales and shifts them, and predictions have to be mapped back with the inverse.
+- Clip, drop broken boxes, round-trip test your converters, and always draw the result.
 
 ## Resources
 

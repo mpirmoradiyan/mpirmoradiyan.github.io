@@ -4,7 +4,7 @@ slug: mean-average-precision
 date: 2023-03-28
 topic: Computer Vision
 tags: [object-detection, evaluation, map, precision-recall, iou, bounding-boxes]
-summary: "How detections are matched to ground-truth boxes with IoU, how the ranked matches become a precision-recall curve, and how AP, mAP@0.5 and COCO's mAP@[.5:.95] are computed from it."
+summary: "How detected boxes get matched to real boxes with IoU, how that turns into a precision-recall curve, and how AP, mAP@0.5 and COCO's mAP@[.5:.95] come out of it."
 sources:
   - title: "The PASCAL Visual Object Classes (VOC) Challenge"
     author: "Mark Everingham, Luc Van Gool, Christopher Williams, John Winn, Andrew Zisserman"
@@ -27,11 +27,11 @@ sources:
 status: draft
 ---
 
-Classification accuracy is easy to define: count the right labels. Detection is harder. A detector outputs a variable number of boxes, each with a class and a score, and a box can be right, slightly off, a duplicate, or pure noise. Mean average precision (mAP) is the standard way to fold all of that into one number. It is worth understanding in detail, because small choices in how it is computed (the IoU threshold, the interpolation, the matching rule) can move the score by several points.
+For classification, scoring is easy: count how many labels are right. Detection is messier. A detector spits out any number of boxes, each with a class and a score, and a box can be right, a bit off, a duplicate, or just noise. Mean average precision (mAP) is the usual way to squash all of that into one number. I wanted to understand it properly, because small choices in how it's computed (the IoU threshold, the interpolation, the matching rule) can shift the score by several points.
 
 ## First, agree on the box format
 
-Before any matching, both predictions and ground truth must use the same box format. Four are common:
+Before matching anything, predictions and ground truth have to use the same box format. These four show up a lot:
 
 | Format | Numbers | Used by |
 |---|---|---|
@@ -40,17 +40,17 @@ Before any matching, both predictions and ground truth must use the same box for
 | `cxcywh` | centre $x$, centre $y$, width, height | many detector heads |
 | YOLO | `cxcywh` divided by image width and height, so in $[0, 1]$ | YOLO label files |
 
-A box at corners $(385, 60, 600, 357)$ is $(385, 60, 215, 297)$ in COCO format and has centre $(492.5, 208.5)$. Mixing formats silently gives near-zero IoUs and a near-zero mAP, which looks like a broken model rather than a broken evaluation. I convert everything to corners before scoring.
+A box at corners $(385, 60, 600, 357)$ is $(385, 60, 215, 297)$ in COCO format and has centre $(492.5, 208.5)$. If you mix formats by accident, you get IoUs near zero and an mAP near zero, and it looks like the model is broken when really the evaluation is. So I just convert everything to corners before scoring.
 
 ## Step 1: is a detection correct?
 
-A detection counts as a **true positive (TP)** when all three hold:
+A detection counts as a **true positive (TP)**, meaning a correct hit, only when all three of these are true:
 
 1. It has the same class as a ground-truth box in the same image.
 2. Its intersection over union with that box is at least a threshold $t$, usually $0.5$. IoU is the overlap area divided by the union area (details in [overlap-based losses](/notes/overlap-based-losses/)).
 3. That ground-truth box has not already been claimed by a **higher-scoring** detection.
 
-Rule 3 is what punishes duplicates. Detections are processed from highest to lowest score, so the best one claims the object and every later box on the same object becomes a **false positive (FP)**. This is why detectors run non-maximum suppression before evaluation. Ground-truth boxes that no detection claims are **false negatives**.
+Rule 3 is the one that punishes duplicates, and it took me a moment to see why it matters. Detections are handled from highest score to lowest, so the best one claims the object, and every later box on that same object becomes a **false positive (FP)**. That's why detectors run non-maximum suppression (removing overlapping boxes) before evaluation. Ground-truth boxes that nobody claims are **false negatives**, objects we missed.
 
 ```python
 import numpy as np
@@ -79,19 +79,19 @@ def match(dets, gts, thr=0.5):
     return np.array(tp), sum(len(v) for v in gts.values())
 ```
 
-Matching happens per image and per class. A detection in image 3 can never match a box in image 7.
+Matching is done per image and per class. A detection in image 3 can never match a box in image 7.
 
 ## Step 2: from ranked matches to a precision-recall curve
 
-Walk down the score-sorted list. After the top $k$ detections, with $\text{TP}_k$ true positives among them and $N$ ground-truth boxes in total:
+Now walk down the list sorted by score. After the top $k$ detections, with $\text{TP}_k$ true positives among them and $N$ ground-truth boxes in total:
 
 $$
 \text{precision}_k = \frac{\text{TP}_k}{k}, \qquad \text{recall}_k = \frac{\text{TP}_k}{N}
 $$
 
-Precision answers "of what I reported, how much was right?". Recall answers "of what was there, how much did I find?". Every possible score threshold corresponds to one point $k$ on this list, so the list traces a curve without having to choose a threshold.
+Precision asks "of what I reported, how much was right?". Recall asks "of what was there, how much did I find?". The nice trick here: every possible score threshold is just one cut-off point $k$ in this list. So walking the list traces out a whole curve, and you never have to pick a threshold.
 
-A small example with three ground-truth boxes in two images:
+Here's a tiny example with three ground-truth boxes in two images:
 
 ```python
 gts = {0: [(10, 10, 50, 50), (60, 60, 90, 100)], 1: [(20, 30, 70, 80)]}
@@ -108,7 +108,7 @@ print(tp)   # [1 0 1 0 1]
 
 ## Step 3: average precision is the area under that curve
 
-The raw curve zig-zags: every false positive drops precision, every true positive raises it a little. The standard fix is **interpolation**: at each recall level, replace precision with the best precision reached at that recall *or higher*. That gives a monotonically decreasing envelope, and AP is the area under it.
+The raw curve zig-zags: every false positive pulls precision down, every true positive pushes it up a little. The usual fix is **interpolation**: at each recall level, swap the precision for the best precision you reach at that recall *or higher*. The way I picture it, you lay a staircase over the top of the zig-zag that only ever goes down. AP is the area under that staircase.
 
 ![A precision-recall curve from synthetic detections. The raw curve zig-zags; a step-shaped envelope sits on top of it, and the shaded area under the envelope is the AP.](fig-pr-curve.png)
 
@@ -126,21 +126,21 @@ def average_precision(tp, n_gt):
 print(round(average_precision(tp, n_gt), 3))   # 0.756
 ```
 
-Here AP $= \tfrac13 \cdot 1 + \tfrac13 \cdot 0.67 + \tfrac13 \cdot 0.6 \approx 0.756$. Notice what hurt: the duplicate at rank 2 and the background box at rank 4 both sit *above* a real object, so they lower precision at the recall levels that follow.
+Here AP $= \tfrac13 \cdot 1 + \tfrac13 \cdot 0.67 + \tfrac13 \cdot 0.6 \approx 0.756$. Look at what hurt: the duplicate at rank 2 and the background box at rank 4 both sit *above* a real object in the ranking, so they drag down precision at the recall levels that come after.
 
-There are three common ways to integrate, and they give slightly different numbers:
+There are three common ways to compute the area, and they give slightly different numbers:
 
 - **VOC 2007, 11-point:** average the envelope at recall $0, 0.1, \dots, 1.0$.
 - **VOC 2010+, all-point:** the exact area under the envelope, as above.
 - **COCO, 101-point:** the envelope sampled at recall $0, 0.01, \dots, 1.0$.
 
-The YOLOv1 code-along I followed integrated the raw zig-zag curve with the trapezoid rule and no envelope. That gives a lower, noisier number than any official protocol. It is fine for watching a training curve, but not for comparing with published results.
+The YOLOv1 code-along I followed used the trapezoid rule on the raw zig-zag curve, with no staircase. That gives a lower, noisier number than any official method. It's fine for watching training progress, but you can't compare it with numbers in papers.
 
 ## Step 4: the "mean" in mAP
 
-AP is computed **per class**, and mAP is the plain average over classes. A rare class counts as much as a common one. A class with no ground truth in the test set is skipped.
+AP is computed **per class**, and mAP is just the plain average over classes. So a rare class counts as much as a common one. A class with no ground truth in the test set is skipped.
 
-Pascal VOC reports mAP at a single IoU threshold of 0.5, written **mAP@0.5** or AP50. COCO's main metric, **mAP@[.5:.95]**, averages AP over ten thresholds, $0.50, 0.55, \dots, 0.95$, and then over classes. It rewards tight boxes:
+Pascal VOC reports mAP at one IoU threshold of 0.5, written **mAP@0.5** or AP50. COCO's main metric, **mAP@[.5:.95]**, averages AP over ten thresholds, $0.50, 0.55, \dots, 0.95$, and then over classes. Basically, it rewards boxes that fit tightly:
 
 ```python
 aps = [average_precision(*match(dets, gts, thr)) for thr in np.arange(0.5, 0.96, 0.05)]
@@ -148,22 +148,22 @@ print(round(float(np.mean(aps)), 3))   # 0.537
 # per threshold: 0.76 x6, then 0.33, 0.33, 0.17, 0.0
 ```
 
-Our toy detector scores 0.76 at IoU 0.5 but only 0.54 on the COCO metric, because its boxes are close but not tight. COCO also reports AP for small, medium and large objects (areas below $32^2$, between $32^2$ and $96^2$, and above $96^2$ pixels) and average recall at a fixed number of detections per image.
+The toy detector gets 0.76 at IoU 0.5 but only 0.54 on the COCO metric, because its boxes are close but not tight. COCO also reports AP for small, medium and large objects (areas below $32^2$, between $32^2$ and $96^2$, and above $96^2$ pixels) and average recall at a fixed number of detections per image.
 
-## Practical traps
+## Easy ways to get it wrong
 
-- **Score threshold before evaluation.** mAP already sweeps all thresholds. Dropping low-score boxes first cuts the curve short and lowers recall, so keep a very low threshold (for example 0.001) when evaluating.
-- **NMS settings change mAP.** Too loose and duplicates become false positives; too tight and real neighbouring objects are suppressed.
-- **`>` versus `>=`.** Whether a detection with IoU exactly 0.5 counts is a convention. Official tools use `>=`.
-- **Use a reference implementation** (pycocotools, torchmetrics) for numbers you will publish. Write your own once to understand it.
+- **Filtering by score before evaluation.** mAP already sweeps over every threshold. If you drop low-score boxes first, the curve gets cut short and recall goes down. So keep a very low threshold (like 0.001) when evaluating.
+- **NMS settings change mAP.** Too loose and duplicates turn into false positives; too tight and real objects sitting next to each other get removed.
+- **`>` versus `>=`.** Whether a detection with IoU of exactly 0.5 counts is just a convention. The official tools use `>=`.
+- **Use a reference implementation** (pycocotools, torchmetrics) for numbers you'll publish. Writing your own once is great for understanding it, though.
 
 ## Key takeaways
 
-- A detection is a true positive only if the class matches, IoU passes the threshold, and no higher-scoring detection already claimed that object.
-- Sorting by score and accumulating TP and FP gives a precision-recall curve without picking a threshold.
-- AP is the area under the interpolated (monotone) precision-recall curve; mAP averages AP over classes.
-- mAP@0.5 checks "found it"; COCO's mAP@[.5:.95] also checks "boxed it tightly".
-- Box formats, NMS settings and the integration method all change the number, so state them with every result.
+- A detection is a true positive only if the class matches, the IoU passes the threshold, and no higher-scoring detection already took that object.
+- Sort by score, count up TPs and FPs as you go, and you get a precision-recall curve without picking a threshold.
+- AP is the area under the smoothed (only-going-down) precision-recall curve; mAP averages AP over classes.
+- mAP@0.5 checks "did you find it?"; COCO's mAP@[.5:.95] also checks "did you box it tightly?".
+- Box formats, NMS settings and the way you compute the area all change the number, so say which you used with every result.
 
 ## Resources
 

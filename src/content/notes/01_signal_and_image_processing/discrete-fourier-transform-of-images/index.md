@@ -4,7 +4,7 @@ slug: discrete-fourier-transform-of-images
 date: 2024-06-13
 topic: Signal & Image Processing
 tags: [fourier, dft, image-processing, frequency-domain, phase]
-summary: "How the 2D DFT writes an image as a sum of complex sinusoids, why a shift only changes the phase, and why phase carries most of what we see."
+summary: "How the 2D DFT writes an image as a sum of waves, why shifting an image only changes the phase, and why the phase holds most of what we see."
 sources:
   - title: "Foundations of Computer Vision, Chapter 16: Fourier Analysis"
     author: "Antonio Torralba, Phillip Isola, William T. Freeman"
@@ -19,21 +19,21 @@ sources:
 status: draft
 ---
 
-The Fourier transform describes an image by how much of each spatial frequency it contains: slow changes such as smooth shading, and fast changes such as edges and texture. It is also the natural language for linear, shift-invariant filters like blurring. I worked through this while reading Chapter 16 of *Foundations of Computer Vision* (Torralba, Isola and Freeman). This note collects the parts that made it click for me.
+The Fourier transform describes an image by how much of each spatial frequency it has: slow changes like smooth shading, and fast changes like edges and texture. It's also the natural way to think about linear, shift-invariant filters such as blurring. I worked through this while reading Chapter 16 of *Foundations of Computer Vision* (Torralba, Isola and Freeman). These are the parts that made it click for me.
 
 ## Images as sums of waves
 
-In one dimension, a signal of $N$ samples can be written as a sum of $N$ complex sinusoids. In two dimensions, the building blocks are 2D waves. A real 2D wave on an $N \times M$ grid looks like
+In 1D, a signal with $N$ samples can be written as a sum of $N$ complex sinusoids. In 2D, the building blocks are 2D waves, like ripples running across the image. A real 2D wave on an $N \times M$ grid looks like
 
 $$
 s[n, m] = A\cos\left(2\pi\left(\frac{u\,n}{N} + \frac{v\,m}{M}\right) + \theta\right),
 $$
 
-where $n, m$ are pixel coordinates, $u$ and $v$ are the number of cycles across the image in each direction, $A$ is the amplitude and $\theta$ the phase. The pair $(u, v)$ sets both how fast the wave oscillates and in which direction its stripes run.
+where $n, m$ are pixel coordinates, $u$ and $v$ are how many cycles fit across the image in each direction, $A$ is the amplitude and $\theta$ is the phase. The pair $(u, v)$ sets both how fast the wave wiggles and which way its stripes run.
 
 ![Real parts of 2D complex exponentials on a 20 by 20 grid for several frequency pairs u, v](fig-fourier-basis.png)
 
-The Fourier transform uses complex exponentials instead, $e^{\,j2\pi(un/N + vm/M)}$. Their real part is a cosine and their imaginary part is a sine, so one complex number per frequency stores both amplitude and phase. Note the last panel, $(u, v) = (16, 4)$ on a 20-pixel grid: it looks identical to $(-4, 4)$, because frequencies above $N/2$ wrap around. That is aliasing, covered in [Sampling and aliasing](/notes/sampling-and-aliasing/).
+The Fourier transform uses complex exponentials instead, $e^{\,j2\pi(un/N + vm/M)}$. Their real part is a cosine and their imaginary part is a sine, so one complex number per frequency stores both the amplitude and the phase. Look at the last panel, $(u, v) = (16, 4)$ on a 20-pixel grid: it looks exactly like $(-4, 4)$, because frequencies above $N/2$ wrap around. That's aliasing, which I wrote about in [Sampling and aliasing](/notes/sampling-and-aliasing/).
 
 ## The 2D DFT
 
@@ -49,9 +49,9 @@ $$
 \ell[n, m] = \frac{1}{NM}\sum_{u=0}^{N-1}\sum_{v=0}^{M-1} \mathcal{L}[u, v]\, e^{\,j2\pi\left(\frac{un}{N} + \frac{vm}{M}\right)}.
 $$
 
-The inverse says the image is a weighted sum of complex exponentials, and $\mathcal{L}[u, v]$ is the weight of each one.
+The inverse is the easier one to read: the image is a weighted sum of complex exponentials, and $\mathcal{L}[u, v]$ is the weight of each one.
 
-In one dimension the DFT is just a matrix product, $\mathcal{L} = F\ell$, with $F[u, n] = e^{-j2\pi un/N}$. Every entry has magnitude 1; only the angle changes. Row $u$ rotates by $2\pi u/N$ per step, so row 0 is constant, low rows rotate slowly, and rows near $N/2$ rotate fastest.
+In 1D the DFT is just a matrix product, $\mathcal{L} = F\ell$, with $F[u, n] = e^{-j2\pi un/N}$. Every entry has size 1; only the angle changes. Row $u$ turns by $2\pi u/N$ per step, so row 0 is constant, low rows turn slowly, and rows near $N/2$ turn fastest.
 
 ![The 20 by 20 DFT matrix, with colour showing the phase of each entry](fig-dft-matrix.png)
 
@@ -66,31 +66,31 @@ x = np.random.rand(N)
 print(np.allclose(F @ x, np.fft.fft(x)))       # True: the FFT computes F @ x
 ```
 
-The FFT gives the same result in $O(N\log N)$ time instead of $O(N^2)$.
+The FFT gives the same answer, just faster: $O(N\log N)$ time instead of $O(N^2)$.
 
 ## Magnitude and phase
 
-Each DFT value is complex, so we write it in polar form:
+Each DFT value is a complex number, so we can write it in polar form:
 
 $$
 \mathcal{L}[u, v] = A[u, v]\, e^{\,j\theta[u, v]}, \qquad A = |\mathcal{L}|, \quad \theta = \angle\mathcal{L}.
 $$
 
-In the inverse transform, $A$ says how strongly each sinusoid contributes and $\theta$ says how it is positioned. To display the spectrum we move the zero frequency to the centre with `np.fft.fftshift` and show $\log(1 + A)$, since the low frequencies are many orders of magnitude stronger than the high ones.
+In the inverse transform, $A$ says how strongly each sinusoid shows up and $\theta$ says where it's positioned. To plot the spectrum, we move the zero frequency to the centre with `np.fft.fftshift` and show $\log(1 + A)$, because the low frequencies are many orders of magnitude stronger than the high ones.
 
 ![An image, its centred log magnitude spectrum and its phase spectrum](fig-magnitude-and-phase.png)
 
-The magnitude looks structured: it is bright in the centre and falls off with frequency, and strong straight edges in the image appear as lines through the centre, perpendicular to the edges. The phase looks like noise. Yet the phase is the more important of the two for what we see.
+The magnitude looks structured. It's bright in the centre and fades with frequency, and strong straight edges in the image show up as lines through the centre, at right angles to the edges. The phase just looks like noise. Surprisingly, though, the phase is the more important of the two for what we see.
 
-## Translation changes only the phase
+## Shifting the image only changes the phase
 
-Shift the image by $(n_0, m_0)$ pixels (circularly, since the DFT treats the image as periodic). Then
+Shift the image by $(n_0, m_0)$ pixels (circularly, because the DFT treats the image as if it repeats forever). Then
 
 $$
 \ell[n - n_0, m - m_0] \;\longleftrightarrow\; \mathcal{L}[u, v]\, e^{-j2\pi\left(\frac{un_0}{N} + \frac{vm_0}{M}\right)}.
 $$
 
-The extra factor has magnitude 1, so the magnitude spectrum does not change at all. The phase gets a term that is linear in frequency. This is the 2D version of the linear phase shift from seismic wavelets (see [Seismic wavelets: amplitude and phase spectra](/notes/wavelet-amplitude-and-phase-spectra/)).
+The extra factor has size 1, so the magnitude spectrum doesn't change at all. The phase just gets an extra term that grows linearly with frequency. This is the 2D version of the linear phase shift I'd seen with seismic wavelets (see [Seismic wavelets: amplitude and phase spectra](/notes/wavelet-amplitude-and-phase-spectra/)).
 
 ```python
 img = np.zeros((5, 5)); img[1:4, 1:4] = 1; img[2, 2] = 0   # small square ring
@@ -105,41 +105,41 @@ print(np.allclose(shifted, np.roll(img, (n0, m0), axis=(0, 1))))  # True
 print(np.allclose(np.abs(np.fft.fft2(shifted)), np.abs(L)))       # True
 ```
 
-One mistake I made at first: I multiplied the *centred* spectrum (after `fftshift`) by an exponential built from `fftfreq`, which is in *uncentred* order. The frequencies then do not line up and the result is not a clean shift. Either work with the uncentred spectrum, as above, or shift both.
+A mistake I made at first: I multiplied the *centred* spectrum (after `fftshift`) by an exponential built from `fftfreq`, which is in *uncentred* order. The frequencies don't line up, and you don't get a clean shift. Either work with the uncentred spectrum, like above, or shift both.
 
-## Phase carries the structure
+## Phase holds the structure
 
 A classic experiment: take two images, swap their phase spectra, and invert.
 
 ![Two images, and the results of combining the magnitude of one with the phase of the other](fig-magnitude-phase-swap.png)
 
-Each result looks like the image its **phase** came from. The phase decides where edges and contours are, because edges appear where many sinusoids line up. The magnitude mostly sets overall contrast and the balance between coarse and fine detail. A short way to say it: location goes into the phase, intensity scaling goes into the magnitude.
+Each result looks like the image its **phase** came from. The way I think about it: edges show up where lots of sinusoids line up, and the phase decides where they line up. So the phase decides where edges and outlines are. The magnitude mostly sets the overall contrast and the balance between coarse and fine detail. Short version: *where* things are goes into the phase, *how strong* they are goes into the magnitude.
 
-This does not mean the magnitude is useless. It is a good description of strongly periodic patterns and textures, and it does not change when the image is translated. But for natural images, most of the recognisable structure lives in the phase.
+That doesn't make the magnitude useless. It's a good description of strongly repeating patterns and textures, and it doesn't change when the image moves. But for natural images, most of the structure you'd recognise lives in the phase.
 
-## Why Fourier is the right tool for linear filters
+## Why Fourier fits linear filters so well
 
-Complex exponentials are **eigenfunctions** of every linear shift-invariant system. Feed one in and the output is the same complex exponential, only multiplied by a complex number: a new amplitude and a new phase. So a filter is fully described by one complex number per frequency, its frequency response $H[u, v]$, and filtering becomes multiplication:
+Complex exponentials are **eigenfunctions** of every linear shift-invariant system. In plain words: feed one in, and what comes out is the same complex exponential, just multiplied by a complex number (so a new amplitude and a new phase). That means a filter is completely described by one complex number per frequency, its frequency response $H[u, v]$, and filtering becomes simple multiplication:
 
 $$
 \ell * h \;\longleftrightarrow\; \mathcal{L}[u, v]\, H[u, v].
 $$
 
-A low-pass filter keeps the centre of the spectrum and removes the rest, which blurs the image. More on this in [Linear filters and Gaussian blur](/notes/linear-filters-and-gaussian-blur/).
+A low-pass filter keeps the centre of the spectrum and throws away the rest, which blurs the image. More on this in [Linear filters and Gaussian blur](/notes/linear-filters-and-gaussian-blur/).
 
 ## How sensitive are we to each frequency?
 
-The Campbell–Robson chart shows a sinusoid whose frequency rises from left to right and whose contrast falls from bottom to top. Where the stripes seem to fade into grey traces your own **contrast sensitivity function**: we see middle frequencies at lower contrast than very low or very high ones.
+The Campbell–Robson chart shows a sinusoid whose frequency goes up from left to right and whose contrast goes down from bottom to top. The line where the stripes seem to fade into grey traces your own **contrast sensitivity function**: we can see middle frequencies at lower contrast than very low or very high ones.
 
 ![Campbell–Robson chart: frequency increases to the right, contrast decreases upwards](fig-campbell-robson.png)
 
 ## Key takeaways
 
-- The 2D DFT writes an image as a weighted sum of complex sinusoids; each weight has a magnitude and a phase.
-- The 1D DFT is a matrix product with unit-magnitude entries; the FFT is a fast way to compute it.
-- Translating an image changes only the phase, by a term linear in frequency.
-- Phase carries most of the visible structure (edges and their positions); magnitude carries contrast and texture energy.
-- Complex exponentials are eigenfunctions of linear shift-invariant filters, so filtering is multiplication in the frequency domain.
+- The 2D DFT writes an image as a weighted sum of complex sinusoids. Each weight has a magnitude and a phase.
+- The 1D DFT is just a matrix product with entries of size 1. The FFT is a fast way to compute it.
+- Shifting an image only changes the phase, by a term that's linear in frequency.
+- Phase holds most of the visible structure (edges and where they are). Magnitude holds contrast and texture energy.
+- Complex exponentials pass through linear shift-invariant filters unchanged except for a scale factor, so filtering is multiplication in the frequency domain.
 
 ## Resources
 

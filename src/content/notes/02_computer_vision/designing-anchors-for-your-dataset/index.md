@@ -4,7 +4,7 @@ slug: designing-anchors-for-your-dataset
 date: 2025-12-09
 topic: Computer Vision
 tags: [anchors, k-means, object-detection, yolo, fpn, genetic-algorithm, numpy]
-summary: "How to pick anchor sizes and aspect ratios from the boxes in your own data: k-means with a 1 − IoU distance, the best-possible-recall and fitness scores, mutation-based refinement, and how the result has to respect the strides of a feature pyramid."
+summary: "How to fit anchor sizes and shapes to the boxes in your own data with k-means on 1 − IoU, how to score them, how to tweak them by random mutation, and why they have to fit the strides of a feature pyramid."
 sources:
   - title: "YOLO9000: Better, Faster, Stronger (YOLOv2), section on dimension clusters"
     author: "Joseph Redmon, Ali Farhadi"
@@ -35,13 +35,13 @@ sources:
 status: draft
 ---
 
-The default anchors of most detectors were tuned on COCO: everyday photos with people, cars and furniture of every size. If your objects are mostly tiny, or long and thin, or all roughly the same size, those defaults waste capacity and make training harder, because few anchors overlap your objects well. Since anchors are just numbers in a config, it is cheap to fit them to your data. This note covers the standard tools for doing that, and one constraint that the standard tools ignore: the stride of the feature map the anchors sit on. (What anchors are and how they are matched to objects is in the [anchors and RPN note](/notes/anchors-and-region-proposal-networks/).)
+Most detectors ship with anchors tuned on COCO: everyday photos of people, cars and furniture at every size. If your objects are mostly tiny, or long and thin, or all about the same size, those defaults are a bad fit. Few anchors overlap your objects well, so training gets harder and part of the head is wasted. Anchors are just numbers in a config, so fitting them to your own data is cheap. These notes cover the usual tools for that, plus one thing the usual tools ignore: the stride of the feature map the anchors sit on. (What anchors are and how they are matched to objects is in the [anchors and RPN note](/notes/anchors-and-region-proposal-networks/).)
 
-## Step 0: measure boxes as the network sees them
+## Step 0: measure the boxes the way the network sees them
 
-Collect the width and height of every ground-truth box in the training set, **after** the resizing, cropping or tiling the training pipeline applies. If images are resized from 2000 to 1000 pixels before entering the network, every box shrinks by half, and anchors fitted to the original sizes will be twice too big. Positions do not matter here, only $(w, h)$ pairs.
+Grab the width and height of every ground-truth box in the training set, but **after** whatever resizing, cropping or tiling the training pipeline does. This is easy to forget. If images go from 2000 to 1000 pixels before entering the network, every box shrinks by half, and anchors fitted to the original sizes end up twice too big. Positions don't matter here, only the $(w, h)$ pairs.
 
-For this note we use a synthetic dataset with four families of objects: many small, roughly square objects, wide and tall elongated ones, and a few large ones.
+To play with this I use a made-up dataset with four groups of objects: lots of small, roughly square ones, some wide and some tall ones, and a few large ones.
 
 ```python
 import numpy as np
@@ -64,15 +64,15 @@ print(wh.shape, "median w, h:", np.median(wh, 0).round(1))
 (8600, 2) median w, h: [18.1 17.9]
 ```
 
-## The right distance: 1 − IoU of shapes
+## The right distance: 1 − IoU of the shapes
 
-To compare a box with an anchor by shape only, put both at the same centre and compute their IoU. The intersection is then simply $\min(w, w_a) \cdot \min(h, h_a)$:
+To compare a box and an anchor by shape only, put them on the same centre and compute their IoU (overlap divided by union). Then the overlap is just $\min(w, w_a) \cdot \min(h, h_a)$:
 
 $$
 \text{IoU}_{wh} = \frac{\min(w, w_a)\,\min(h, h_a)}{w h + w_a h_a - \min(w, w_a)\,\min(h, h_a)}
 $$
 
-YOLOv2 used $d = 1 - \text{IoU}_{wh}$ as the distance in k-means. The reason is scale. With Euclidean distance on $(w, h)$, a large box that is 20 pixels off counts as much as a small box that is 20 pixels off, even though the first is a near-perfect match and the second a terrible one. Euclidean k-means therefore spends its centres where the absolute spread is largest, which is among the big boxes. IoU is scale-free: being 20% too wide costs the same at every size.
+YOLOv2 used $d = 1 - \text{IoU}_{wh}$ as the distance in k-means. The reason is scale. With plain Euclidean distance on $(w, h)$, a big box that's 20 pixels off counts the same as a small box that's 20 pixels off. But the first is an almost perfect match and the second is terrible. So Euclidean k-means puts its centres where the absolute spread is biggest, which means among the big boxes. IoU doesn't care about scale: being 20% too wide costs the same at every size.
 
 ```python
 def iou_wh(wh, anchors):                            # (N, 2), (K, 2) -> (N, K)
@@ -114,24 +114,24 @@ iou       mean IoU 0.750 {'small': 0.77, 'wide': 0.75, 'tall': 0.74, 'large': 0.
           anchors: [[12, 11], [12, 18], [19, 12], [19, 19], [52, 22], [22, 52], [75, 24], [24, 77], [170, 156]]
 ```
 
-The Euclidean version gives three of its nine anchors to the large family, which holds only 7% of the boxes, and a single anchor to the small family, which holds 58%. The IoU version gives the small family four anchors and the large family one. The average box gets a better match, and the per-group numbers are more even.
+Look at where the anchors went. The Euclidean version gives three of its nine anchors to the large group, which is only 7% of the boxes, and just one anchor to the small group, which is 58%. The IoU version gives the small group four anchors and the large group one. The average box gets a better match, and the per-group numbers are more even.
 
 ![Scatter plot of synthetic box widths and heights on log axes, with nine k-means centres from Euclidean distance (squares) crowding the large boxes and nine centres from 1 − IoU distance (crosses) spread across the small, wide and tall families](fig-kmeans-anchors.png)
 
-Two practical points. Plain k-means depends on its starting centres, so seed it with k-means++ and keep the best of several runs. And the mean IoU always rises with $k$, but each extra anchor adds output channels to the head and more anchors to label, so pick $k$ at the elbow of the curve, not at the maximum.
+Two practical things. Plain k-means depends on where it starts, so seed it with k-means++ (which spreads the starting points out) and keep the best of several runs. And the mean IoU always goes up as $k$ grows, but each extra anchor adds output channels to the head and more anchors to label. So pick $k$ at the elbow of the curve, not at the top.
 
 ## Scoring a set of anchors: best possible recall and fitness
 
-YOLOv5's AutoAnchor uses a simpler shape match than IoU. For a box and an anchor, take the width ratio and the height ratio, fold each into $(0, 1]$ so that "half as big" and "twice as big" score the same, and keep the worse of the two sides:
+YOLOv5's AutoAnchor uses a simpler shape match than IoU. For a box and an anchor, take the width ratio and the height ratio. Flip each one into $(0, 1]$ so that "half as big" and "twice as big" score the same. Then keep the worse of the two:
 
 $$
 m(b, a) = \min\left(\frac{w}{w_a}, \frac{w_a}{w}, \frac{h}{h_a}, \frac{h_a}{h}\right), \qquad m(b) = \max_a m(b, a)
 $$
 
-$m(b) = 1$ means some anchor has exactly the box's shape. If $m(b) < 1/4$, no anchor is within a factor of 4 on both sides, and in YOLOv5's matching rule the box would get no anchor at all. Two scores follow:
+$m(b) = 1$ means some anchor has exactly the box's shape. If $m(b) < 1/4$, no anchor is within a factor of 4 on both sides, and under YOLOv5's matching rule that box gets no anchor at all. From this you get two scores:
 
-- **Best possible recall (BPR)**: the fraction of boxes with $m(b) > 1/4$. It is an upper bound on recall from anchor coverage alone. AutoAnchor recomputes anchors when BPR falls below 0.98.
-- **Fitness**: the mean of $m(b)$, counting boxes below the threshold as 0. It rewards close matches, not just any match.
+- **Best possible recall (BPR)**: the share of boxes with $m(b) > 1/4$. It's the best recall you could hope for if anchor coverage were the only limit. AutoAnchor recomputes the anchors when BPR drops below 0.98.
+- **Fitness**: the mean of $m(b)$, with boxes below the threshold counted as 0. It rewards close matches, not just any match.
 
 ```python
 def ratio_metric(wh, anchors):
@@ -158,11 +158,11 @@ print(f"default anchors: BPR {best_possible_recall(wh, default):.3f}, "
 default anchors: BPR 0.992, fitness 0.541, mean IoU 0.397
 ```
 
-This shows why BPR alone is not enough: the default anchors "cover" 99% of our boxes within a factor of 4, yet the average best IoU is only 0.40. Most small boxes are matched by a 32-pixel anchor that is twice too big on each side.
+This is why BPR alone isn't enough. The default anchors "cover" 99% of the boxes within a factor of 4, but the average best IoU is only 0.40. Most small boxes get matched to a 32-pixel anchor that's twice too big on each side.
 
-## Refining by mutation
+## Tweaking by random mutation
 
-k-means optimises mean IoU under a fixed number of free $(w, h)$ centres. Often you want to optimise something else (like fitness), or keep a constrained form (like the size × ratio grid an FPN uses). A simple search works for both: randomly scale some parameters by a factor close to 1, keep the change if the score improves, repeat. YOLOv5 calls this a genetic algorithm, but there is no population and no crossover. It is really a (1+1) evolution strategy, a form of random hill climbing.
+k-means maximises mean IoU with a fixed number of free $(w, h)$ centres. Often you want to optimise something else (like fitness), or keep a fixed structure (like the size × ratio grid an FPN uses). A simple search handles both: randomly scale some parameters by a factor close to 1, keep the change if the score gets better, and repeat. YOLOv5 calls this a genetic algorithm, but there's no population and no crossover. It's really a (1+1) evolution strategy, which is basically random hill climbing.
 
 ```python
 def evolve(params, build, wh, gens=1000, p=0.9, sigma=0.1, seed=0):
@@ -189,13 +189,13 @@ sizes [  14.2   35.4  133.7  183.4 1374.6] ratios [0.46 1.02 2.4 ]
 fitness 0.769, mean IoU 0.698
 ```
 
-Note the line `np.where(mutate, ..., 1.0)`. Multiplying the random factors by the boolean mask instead (`normal(...) * mutate`) is an easy mistake: the parameters that should stay unchanged get the factor 0, which the clip then turns into 0.3, so they shrink every step.
+Watch the line `np.where(mutate, ..., 1.0)`. It's easy to write `normal(...) * mutate` instead, multiplying the random factors by the boolean mask. Then the parameters that should stay the same get a factor of 0, the clip turns that into 0.3, and they shrink every step.
 
-The search moved the smallest size from 32 to 14 and stretched the ratios toward the elongated families. It also shows the method's blind spot. The fifth size drifted to 1375 pixels, and the third and fourth sizes ended up close together. No box is near 1375 pixels, but the score does not care about anchors that match nothing; it only rewards the best anchor per box. A good start (for example from k-means) and sanity bounds on the parameters avoid such results.
+The search moved the smallest size from 32 to 14 and stretched the ratios towards the wide and tall groups. It also shows the method's blind spot. The fifth size drifted to 1375 pixels, and the third and fourth sizes ended up close together. No box is anywhere near 1375 pixels, but the score doesn't care about anchors that match nothing. It only rewards the best anchor for each box. Starting from a good guess (for example from k-means) and putting sane limits on the parameters avoids this.
 
-## The constraint the shape metrics ignore: stride
+## What the shape scores ignore: the stride
 
-Both IoU-of-shapes and the ratio metric pretend that an anchor can sit exactly on every object's centre. In reality anchors sit on a grid with spacing equal to the stride $s$. An object centred between grid points is off by up to $s/2$ in $x$ and in $y$ from the nearest anchor centre. For a square object and a square anchor of the same side $a = m\,s$, that worst-case shift gives
+This is the part that took me a while to see. Both the shape IoU and the ratio score pretend an anchor can sit exactly on every object's centre. In reality anchors sit on a grid, spaced one stride $s$ apart. An object whose centre falls between grid points is up to $s/2$ off in $x$ and in $y$ from the nearest anchor centre. For a square object and a square anchor with the same side $a = m\,s$, that worst-case shift gives
 
 $$
 \text{IoU} = \frac{(m - \tfrac12)^2}{2m^2 - (m - \tfrac12)^2}
@@ -205,27 +205,27 @@ $$
 |---|---|---|---|---|---|
 | worst-case IoU | 0.39 | 0.53 | 0.62 | 0.73 | 0.78 |
 
-With the usual RPN rule (positive at IoU $\ge 0.7$), an anchor needs to be about **6 to 8 times the stride** for every object of its size to reach that threshold. That is why the FPN anchors are $8\times$ the stride (32 on stride 4, up to 512 on stride 64).
+With the usual RPN rule (an anchor counts as positive at IoU $\ge 0.7$), an anchor has to be about **6 to 8 times the stride** for every object of its size to reach that threshold. That's why the FPN anchors are $8\times$ the stride (32 on stride 4, up to 512 on stride 64).
 
-This has direct consequences when you map data-driven sizes onto a pyramid:
+So when you put your data-driven sizes onto a pyramid:
 
-- **Assign each size to a level where size/stride is roughly 4 to 8.** One level can carry several sizes, which most frameworks allow.
-- **If your objects are smaller than about $6\times$ the finest stride**, no anchor tuning fixes the grid. For our 14-pixel objects, even stride 4 gives $m = 3.5$. The usual fixes are to upscale the input (or tile and upscale, see the [tiling note](/notes/tiling-large-images-for-detection/)), to add a finer level, or to lower the positive IoU threshold and rely on the "best anchor per object" rule.
-- **Levels with no matching sizes** still cost compute. If no object needs stride 64, that level is only overhead.
+- **Put each size on a level where size/stride is roughly 4 to 8.** One level can hold several sizes, and most frameworks allow that.
+- **If your objects are smaller than about $6\times$ the finest stride**, no amount of anchor tuning fixes the grid. For the 14-pixel objects here, even stride 4 gives only $m = 3.5$. The usual fixes are to upscale the input (or tile and upscale, see the [tiling note](/notes/tiling-large-images-for-detection/)), add a finer level, or lower the positive IoU threshold and rely on the "best anchor per object" rule.
+- **Levels with no matching sizes** still cost compute. If no object needs stride 64, that level is just overhead.
 
 ## Other pitfalls
 
-- **Aspect-ratio convention.** Some libraries define the ratio as $h/w$, others as $w/h$. Swapping them turns your tall anchors wide. Check with one anchor before training.
-- **Outliers.** A few annotation errors (1-pixel boxes, boxes as wide as the image) can pull a k-means centre. Look at the size histogram and drop obvious errors, but do not cut real rare shapes just because they are rare.
-- **Fit on the training split** and check BPR on the validation split, like any other fitted hyperparameter.
-- **Anchor-free detectors** (FCOS, CenterNet, recent YOLO versions) predict boxes from points without anchor templates. They still have a stride, so the small-object problem in the table above remains.
+- **Which way the ratio goes.** Some libraries define the aspect ratio as $h/w$, others as $w/h$. Mix them up and your tall anchors become wide. Check with one anchor before training.
+- **Outliers.** A few labeling mistakes (1-pixel boxes, boxes as wide as the image) can drag a k-means centre. Look at the size histogram and drop obvious mistakes, but don't cut real shapes just because they're rare.
+- **Fit on the training split** and check BPR on the validation split, like any other fitted setting.
+- **Anchor-free detectors** (FCOS, CenterNet, recent YOLO versions) predict boxes from points without anchor templates. They still have a stride, though, so the small-object problem in the table above doesn't go away.
 
 ## Key takeaways
 
-- Measure $(w, h)$ after the training resize, then cluster with $d = 1 - \text{IoU}_{wh}$; Euclidean k-means wastes anchors on the largest boxes.
-- Score anchor sets with best possible recall (coverage within a factor of 4) and fitness (closeness); a high BPR alone can hide poor matches.
-- Mutation-based search refines anchors under any score and any parameterisation, but it ignores anchors that match nothing, so start from a good guess.
-- Anchors must be roughly 6–8× the stride of their level for objects anywhere on the grid to reach IoU 0.7; tiny objects need a finer stride or upscaling, not just smaller anchors.
+- Measure $(w, h)$ after the training resize, then cluster with $d = 1 - \text{IoU}_{wh}$. Euclidean k-means wastes anchors on the biggest boxes.
+- Score anchor sets with best possible recall (covered within a factor of 4) and fitness (how close). A high BPR on its own can hide bad matches.
+- Random mutation search can tweak anchors for any score and any setup, but it ignores anchors that match nothing, so start from a good guess.
+- Anchors need to be roughly 6–8× the stride of their level so objects anywhere on the grid can reach IoU 0.7. Tiny objects need a finer stride or upscaling, not just smaller anchors.
 
 ## Resources
 

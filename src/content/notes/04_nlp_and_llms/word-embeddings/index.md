@@ -4,7 +4,7 @@ slug: word-embeddings
 date: 2025-03-07
 topic: NLP & LLMs
 tags: [word-embeddings, word2vec, skip-gram, cbow, negative-sampling, svd, gensim]
-summary: "Why dense word vectors beat one-hot codes, how to get them from co-occurrence counts with SVD or by training skip-gram with negative sampling, and how to query pretrained vectors for similarity and analogies."
+summary: "Why short dense word vectors are better than one-hot codes, two ways to get them (counting plus SVD, or word2vec with negative sampling), and how to use pretrained vectors for similarity and analogies."
 sources:
   - title: "Efficient Estimation of Word Representations in Vector Space"
     author: "Tomas Mikolov, Kai Chen, Greg Corrado, Jeffrey Dean (2013)"
@@ -27,25 +27,25 @@ sources:
 status: draft
 ---
 
-Neural networks need numbers, and the simplest way to turn a word into numbers is a one-hot vector: as long as the vocabulary, all zeros except a single 1. One-hot vectors are huge and say nothing about meaning; "cat" is exactly as far from "dog" as from "carburettor". **Word embeddings** replace them with short dense vectors, learned so that words used in similar contexts end up close together. This note builds embeddings two ways, from counts and with word2vec, and then uses pretrained vectors.
+Neural networks need numbers. The simplest way to turn a word into numbers is a one-hot vector: a vector as long as the vocabulary, all zeros except a single 1. The problem is that one-hot vectors are huge and say nothing about meaning. "Cat" is exactly as far from "dog" as it is from "carburettor". **Word embeddings** swap them for short, dense vectors (every number is used), learned so that words used in similar places end up close together. In these notes I build embeddings two ways, from counts and with word2vec, and then try pretrained vectors.
 
 ## The idea: you know a word by its neighbours
 
-The distributional hypothesis says that words appearing in similar contexts tend to have similar meanings. "Cat" and "dog" both show up next to "the", "chased", "played" and "pet". If a vector for each word is built from, or trained to predict, its neighbours, words with similar neighbours get similar vectors.
+This idea has a fancy name, the distributional hypothesis, but it just says that words that show up in similar contexts usually mean similar things. "Cat" and "dog" both appear next to "the", "chased", "played" and "pet". So if you build each word's vector from its neighbours (or train it to predict them), words with similar neighbours get similar vectors.
 
-Similarity between vectors is usually measured with **cosine similarity**:
+To measure how similar two vectors are, people usually use **cosine similarity**:
 
 $$
 \cos(u, v) = \frac{u \cdot v}{\lVert u \rVert \, \lVert v \rVert},
 $$
 
-which is 1 for vectors pointing the same way, 0 for orthogonal ones and -1 for opposite ones. It ignores vector length, which often reflects word frequency more than meaning.
+It's 1 when the vectors point the same way, 0 when they're at right angles and -1 when they point in opposite directions. It ignores how long the vectors are, which is good, because length often says more about how common a word is than what it means.
 
-## Method 1: count co-occurrences, then compress with SVD
+## Method 1: count which words appear together, then compress with SVD
 
-Count how often each word appears within a window of each other word. With a window of 1 on three toy sentences ("the cat sat on the mat", "the dog chased the cat", "the cat and the dog played") this gives a 9 x 9 symmetric matrix. Each row is already a vector description of a word, but it is as long as the vocabulary and very sparse.
+Count how often each word shows up near each other word (within some window). With a window of 1 on three toy sentences ("the cat sat on the mat", "the dog chased the cat", "the cat and the dog played") you get a 9 x 9 symmetric matrix. Each row already describes a word as a vector, but it's as long as the vocabulary and mostly zeros.
 
-The **singular value decomposition** $M = U \Sigma V^\top$ finds the directions that explain most of the structure in the matrix. Keeping the top $k$ singular values gives the best rank-$k$ approximation of $M$, and the rows of $U_k \Sigma_k^{1/2}$ serve as $k$-dimensional word vectors.
+The **singular value decomposition** $M = U \Sigma V^\top$ finds the directions that explain most of what's going on in the matrix. If you keep only the top $k$ singular values, you get the best rank-$k$ approximation of $M$, and the rows of $U_k \Sigma_k^{1/2}$ work as $k$-dimensional word vectors. So basically SVD squeezes the long sparse rows into short dense ones.
 
 ```python
 import numpy as np
@@ -68,32 +68,32 @@ k = 2
 emb = U[:, :k] * np.sqrt(S[:k])   # one k-dimensional vector per word
 ```
 
-This is the core of latent semantic analysis. In practice raw counts are dominated by frequent words like "the", so the matrix is usually reweighted first, for example with the logarithm or positive pointwise mutual information. GloVe is a modern descendant of this counting approach: it fits word vectors so that their dot products match the log co-occurrence counts.
+This is the heart of latent semantic analysis. In practice, raw counts are swamped by common words like "the", so the matrix is usually reweighted first, for example with a logarithm or with positive pointwise mutual information (a score for how much more often two words appear together than chance would predict). GloVe is a newer take on this counting idea: it fits word vectors so that their dot products match the log of the co-occurrence counts.
 
 ## Method 2: word2vec, learning by prediction
 
-Word2vec trains a shallow model on a prediction task and keeps the learned weights as embeddings. It has two variants:
+Word2vec trains a very small model on a guessing game, and then keeps the learned weights as the embeddings. The guessing game itself isn't the point. There are two versions:
 
-- **Skip-gram**: given the centre word, predict each word in its context window.
-- **CBOW** (continuous bag of words): given the averaged context words, predict the centre word.
+- **Skip-gram**: given the centre word, guess each word around it.
+- **CBOW** (continuous bag of words): given the surrounding words (averaged), guess the centre word.
 
-Each word gets two vectors: $v_w$ when it is the centre (input) word and $u_c$ when it is a context (output) word. The full skip-gram model uses a softmax over the whole vocabulary,
+Each word gets two vectors: $v_w$ when it's the centre (input) word and $u_c$ when it's a context (output) word. The full skip-gram model uses a softmax over the whole vocabulary,
 
 $$
 P(c \mid w) = \frac{\exp(u_c \cdot v_w)}{\sum_{c'=1}^{|V|} \exp(u_{c'} \cdot v_w)},
 $$
 
-where $|V|$ is the vocabulary size. The denominator touches every word in the vocabulary for every training pair, which is far too slow for a vocabulary of a million words.
+where $|V|$ is the vocabulary size. The problem is the bottom of the fraction: it goes over every word in the vocabulary for every single training pair. With a million words that's way too slow.
 
 ### Negative sampling
 
-**Negative sampling** turns the problem into binary classification. For each real (centre, context) pair, draw $K$ random "negative" words $n_1, \dots, n_K$ and train the model to say yes to the real pair and no to the fake ones:
+**Negative sampling** turns it into a simple yes/no question. For each real (centre, context) pair, pick $K$ random "negative" words $n_1, \dots, n_K$, and train the model to say yes to the real pair and no to the fake ones:
 
 $$
 \mathcal{L} = -\log \sigma(u_c \cdot v_w) - \sum_{k=1}^{K} \log \sigma(-u_{n_k} \cdot v_w),
 $$
 
-where $\sigma$ is the sigmoid. The negatives are drawn from the unigram distribution raised to the power 0.75, which samples rare words a bit more often than their raw frequency.
+where $\sigma$ is the sigmoid. The negatives are drawn from the word-frequency distribution raised to the power 0.75. That small tweak picks rare words a bit more often than their raw frequency would.
 
 ```python
 import torch, torch.nn as nn, torch.nn.functional as F
@@ -110,15 +110,15 @@ class SkipGramNS(nn.Module):
         return -(F.logsigmoid(pos) + F.logsigmoid(-neg).sum(-1)).mean()
 ```
 
-`F.logsigmoid` is used instead of `torch.log(torch.sigmoid(x))` because it stays accurate when the sigmoid is very close to 0 or 1.
+I use `F.logsigmoid` instead of `torch.log(torch.sigmoid(x))` because it stays accurate when the sigmoid is very close to 0 or 1.
 
-**A mistake to avoid.** My first skip-gram and CBOW versions computed `sigmoid(u_c · v_w)` and trained it with binary cross-entropy against a target of 1, using only the real pairs. That objective has a trivial solution: make all vectors large and aligned, so every dot product is huge and every prediction says "yes". The loss goes to zero and the vectors mean nothing. The negative examples are what force the model to tell real neighbours apart from random words. Without them (or a full softmax), there is nothing to learn.
+**A mistake I made.** My first skip-gram and CBOW versions computed `sigmoid(u_c · v_w)` and trained it with binary cross-entropy against a target of 1, using only the real pairs. That has a lazy solution: make all vectors big and pointing the same way, so every dot product is huge and every answer is "yes". The loss drops to zero and the vectors mean nothing. It's the negative examples that force the model to tell real neighbours from random words. Without them (or a full softmax), there's nothing to learn.
 
-On a corpus of four sentences nothing meaningful emerges anyway; word2vec needs millions of words. The value of the toy runs is checking shapes and the loss, not reading the vectors.
+On a corpus of four sentences nothing meaningful comes out anyway, since word2vec needs millions of words. The toy runs are only useful for checking shapes and the loss, not for reading the vectors.
 
 ## Using pretrained vectors
 
-For real work, start from vectors trained on a large corpus. Gensim can download Google's word2vec model, trained on about 100 billion words of news, with 300-dimensional vectors for 3 million words and phrases.
+For anything real, it makes more sense to start from vectors someone already trained on a huge amount of text. Gensim can download Google's word2vec model, trained on about 100 billion words of news, with 300-dimensional vectors for 3 million words and phrases.
 
 ```python
 import gensim.downloader as api
@@ -129,18 +129,18 @@ print(wv.most_similar("cat", topn=3))
 print(wv.most_similar(positive=["Paris", "Italy"], negative=["France"], topn=1))
 ```
 
-The famous analogy property, "king - man + woman ≈ queen", is a statement about **nearest neighbours**, not equality. My first test, `wv['Italy'] - wv['Rome'] == wv['France'] - wv['Paris']`, compared two float vectors element by element and returned 300 `False` values. The right test computes the offset vector and asks which word is closest to it by cosine similarity, which is what `most_similar` does (it also excludes the input words from the answer).
+This one tripped me up. The famous analogy "king - man + woman ≈ queen" is about **nearest neighbours**, not equality. My first test, `wv['Italy'] - wv['Rome'] == wv['France'] - wv['Paris']`, compared two float vectors number by number and gave me 300 `False` values. The right way is to compute the offset vector and ask which word is closest to it by cosine similarity. That's what `most_similar` does (and it also leaves the input words out of the answer).
 
 ## Beyond single words
 
-Static word vectors give one vector per word, so "bank" (river) and "bank" (money) share a vector. Contextual models such as BERT and GPT produce a different vector for each occurrence, depending on the sentence. Sentence-embedding models (for example `all-MiniLM-L6-v2` in the sentence-transformers library, which returns 384-dimensional vectors) go one step further and embed whole sentences for search and clustering. Inside every LLM, though, the first layer is still an embedding table of exactly the kind described here.
+Plain word vectors give one vector per word, so "bank" (river) and "bank" (money) get the same vector. Contextual models like BERT and GPT give a different vector each time a word appears, depending on the sentence. Sentence-embedding models (for example `all-MiniLM-L6-v2` in the sentence-transformers library, which returns 384-dimensional vectors) go one step further and turn whole sentences into vectors, for search and clustering. What I like is that inside every LLM, the first layer is still an embedding table just like the one here.
 
 ## Key takeaways
 
-- One-hot vectors are long, sparse and carry no similarity; embeddings are short, dense and learned from context.
-- Co-occurrence counts plus SVD give embeddings directly; GloVe refines this counting view.
-- Word2vec learns embeddings by predicting neighbours (skip-gram) or the centre word (CBOW); negative sampling makes training cheap.
-- Training only on positive pairs with a sigmoid is degenerate. Negative examples or a full softmax are required.
+- One-hot vectors are long, mostly zeros and say nothing about similarity. Embeddings are short, dense and learned from context.
+- Counting which words appear together, then compressing with SVD, gives embeddings directly. GloVe builds on this counting idea.
+- Word2vec learns embeddings by guessing the neighbours (skip-gram) or the centre word (CBOW). Negative sampling makes training cheap.
+- Training only on real pairs with a sigmoid doesn't work: the model learns to say "yes" to everything. You need negative examples or a full softmax.
 - Analogies are nearest-neighbour searches on vector offsets with cosine similarity, not exact equalities.
 
 ## Resources

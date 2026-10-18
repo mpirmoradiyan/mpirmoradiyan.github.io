@@ -4,7 +4,7 @@ slug: gpt2-architecture
 date: 2025-05-27
 topic: NLP & LLMs
 tags: [gpt-2, transformer, hugging-face, state-dict, position-embeddings, gelu, pytorch]
-summary: "What the smallest GPT-2 looks like from the inside: every tensor in its state dict, where its 124 million parameters live, what its learned position embeddings look like, and how to rewrite the same architecture in about 60 lines of PyTorch."
+summary: "A look inside the smallest GPT-2: every tensor in its state dict, where its 124 million parameters sit, what its learned position embeddings look like, and how to rebuild it in about 60 lines of PyTorch."
 sources:
   - title: "Let's reproduce GPT-2 (124M)"
     author: "Andrej Karpathy (Neural Networks: Zero to Hero)"
@@ -31,11 +31,11 @@ sources:
 status: draft
 ---
 
-After building a small GPT from scratch, the natural next question is how far it is from a real one. The answer: not far. GPT-2, released by OpenAI in 2019, uses the same decoder-only blocks, just bigger and with a few specific choices. Its smallest version has 124 million parameters and public weights, so you can open it up, inspect every tensor, and write your own module that matches it name for name. This note does that.
+After building a small GPT from scratch, I wanted to know how far it was from a real one. Turns out, not that far. GPT-2, released by OpenAI in 2019, uses the same decoder-only blocks, just bigger and with a few specific choices. Its smallest version has 124 million parameters and the weights are public. So you can open it up, look at every tensor, and write your own version that matches it name for name. That's what I did here.
 
-## Loading the reference model
+## Loading the real model
 
-The Hugging Face `transformers` library ships the OpenAI weights.
+The Hugging Face `transformers` library comes with the OpenAI weights.
 
 ```python
 from transformers import GPT2LMHeadModel
@@ -45,7 +45,7 @@ for name, tensor in list(sd_hf.items())[:16]:
     print(name, tuple(tensor.shape))
 ```
 
-The state dict is the complete list of learned tensors. For the 124M model it reads like a blueprint:
+The state dict is just the full list of learned tensors. For the 124M model it reads like a blueprint:
 
 | tensor | shape | role |
 |---|---|---|
@@ -60,11 +60,11 @@ The state dict is the complete list of learned tensors. For the 124M model it re
 | `transformer.ln_f.weight/bias` | (768,) | final layer norm |
 | `lm_head.weight` | (50257, 768) | output layer: logits over the vocabulary |
 
-So the hyperparameters can be read straight off the shapes: a vocabulary of 50,257 tokens (256 bytes + 50,000 BPE merges + `<|endoftext|>`, see the [tokenization note](/notes/tokenization-bpe/)), a context of 1,024 tokens, a width of 768, 12 layers, and 12 heads of size 64 (768 / 12). The fused `c_attn` output of 2,304 is 3 x 768: query, key and value side by side.
+What I liked is that you can read all the settings straight off the shapes: a vocabulary of 50,257 tokens (256 bytes + 50,000 BPE merges + `<|endoftext|>`, see the [tokenization note](/notes/tokenization-bpe/)), a context of 1,024 tokens, a width of 768, 12 layers, and 12 heads of size 64 (768 / 12). The `c_attn` output of 2,304 is 3 x 768: query, key and value packed side by side in one layer.
 
-`lm_head.weight` has the same shape as `wte.weight`, and in GPT-2 they are the **same tensor** (weight tying). The matrix that turns a token into a vector is reused, transposed, to turn the final vector back into token scores. That saves 38.6 million parameters, about 30% of the model.
+`lm_head.weight` has the same shape as `wte.weight`, and in GPT-2 they're actually the **same tensor**. This is called weight tying. The matrix that turns a token into a vector gets reused (transposed) to turn the final vector back into token scores. That saves 38.6 million parameters, about 30% of the model.
 
-## Where the 124M parameters are
+## Where the 124M parameters live
 
 | part | parameters |
 |---|---|
@@ -75,19 +75,19 @@ So the hyperparameters can be read straight off the shapes: a vocabulary of 50,2
 | final layer norm | 1,536 |
 | **total** | **124,439,808** |
 
-In each block the MLP holds about twice as many parameters as attention. Almost a third of the whole model is the embedding table.
+Two things surprised me here. In each block the MLP has about twice as many parameters as attention. And almost a third of the whole model is just the embedding table.
 
 ## What the position embeddings learned
 
-GPT-2 does not use the fixed sine and cosine position codes of the original transformer; it learns one 768-dimensional vector per position. Displayed as a (1024, 768) grey-scale image, the table shows faint vertical stripes, a first hint of structure. Plotting single columns (one feature, across all 1,024 positions) makes it clearer:
+GPT-2 doesn't use the fixed sine and cosine position codes from the original transformer. Instead it learns one 768-dimensional vector per position. If you show the (1024, 768) table as a grey-scale image, you see faint vertical stripes, which is a first hint that there's some structure. Plotting single columns (one feature, across all 1,024 positions) makes it clearer:
 
 ![Three columns of GPT-2's learned position embedding table plotted against position from 0 to 1023. Each curve varies smoothly and slowly, like a low-frequency wave, with small jagged noise on top and sharp jumps at the very first positions.](fig-gpt2-position-embedding-columns.png)
 
-The curves are smooth, wave-like functions of position, reminiscent of the sinusoids the original transformer used by design, even though GPT-2 started from random noise. Different features respond to different ranges of positions. The jagged noise on top suggests the table is not fully trained: neighbouring positions should have nearly identical embeddings, and a perfectly converged model would likely show smoother curves. Other approaches to encoding position, such as rotary embeddings, are covered in a separate note.
+The curves are smooth waves over position. They look a lot like the sine waves the original transformer used on purpose, even though GPT-2 started from random noise and found this on its own. I found that pretty cool. Different features react to different ranges of positions. The jagged noise on top hints that the table isn't fully trained: neighbouring positions should have almost the same embedding, so a fully trained model would probably give smoother curves. Other ways to encode position, like rotary embeddings, go in a separate note.
 
-## The architecture in code
+## Rebuilding it in code
 
-Writing the model so that its parameter names match the Hugging Face ones makes it possible to load the official weights later. Compared with the [small GPT](/notes/gpt-from-scratch/), the differences are: a fused QKV projection, GELU instead of ReLU, a final layer norm, and an output layer without bias.
+If my parameter names match the Hugging Face ones, I can load the official weights into my model later. Compared with the [small GPT](/notes/gpt-from-scratch/), the differences are: one combined layer for Q, K and V, GELU instead of ReLU, a final layer norm, and an output layer without bias.
 
 ```python
 from dataclasses import dataclass
@@ -117,7 +117,7 @@ class CausalSelfAttention(nn.Module):
         return self.c_proj(y.transpose(1, 2).contiguous().view(B, T, C))
 ```
 
-`F.scaled_dot_product_attention` computes $\operatorname{softmax}(QK^\top/\sqrt{d_k} + M)V$ with the causal mask $M$ in one fused kernel. It gives the same result as the explicit version in the [multi-head attention note](/notes/multi-head-attention/) but never stores the full (T, T) matrix in memory, which matters at T = 1,024.
+`F.scaled_dot_product_attention` computes $\operatorname{softmax}(QK^\top/\sqrt{d_k} + M)V$ with the causal mask $M$ in one go (one fused GPU kernel). It gives the same result as the step-by-step version in the [multi-head attention note](/notes/multi-head-attention/), but it never keeps the full (T, T) matrix in memory. At T = 1,024 that really matters.
 
 ```python
 class MLP(nn.Module):
@@ -160,15 +160,15 @@ class GPT(nn.Module):
 print(sum(p.numel() for p in GPT(GPTConfig()).parameters()))  # 124439808
 ```
 
-Notes on the choices:
+A few things I want to remember:
 
-- **GELU** is a smooth version of ReLU, $\text{GELU}(x) = x\,\Phi(x)$ with $\Phi$ the standard normal CDF. GPT-2 used the tanh approximation of it, so `approximate="tanh"` is needed to reproduce its outputs exactly.
-- **Names matter.** My first version called the layer norms `ln1` and `ln2`. The model ran, but its state dict keys would not match `ln_1` and `ln_2` in the official checkpoint, so loading the weights by name would fail.
-- **Transposed weights.** OpenAI's code used a `Conv1D` module whose weight is stored as (in, out), while `nn.Linear` stores (out, in). That is why `c_attn.weight` shows up as (768, 2304) in the table above. When copying the official weights into `nn.Linear` layers, the `c_attn`, `c_proj` and `c_fc` matrices must be transposed.
+- **GELU** is a smooth version of ReLU, $\text{GELU}(x) = x\,\Phi(x)$ with $\Phi$ the standard normal CDF. GPT-2 used a tanh-based approximation of it, so you need `approximate="tanh"` to get exactly the same outputs.
+- **Names matter.** My first version called the layer norms `ln1` and `ln2`. The model ran fine, but its state dict keys didn't match `ln_1` and `ln_2` in the official checkpoint, so loading the weights by name would have failed.
+- **Transposed weights.** This one confused me at first. OpenAI's code used a `Conv1D` module that stores its weight as (in, out), while `nn.Linear` stores (out, in). That's why `c_attn.weight` shows up as (768, 2304) in the table above. So when you copy the official weights into `nn.Linear` layers, you have to transpose the `c_attn`, `c_proj` and `c_fc` matrices.
 
 ## Sampling from the real thing
 
-With the Hugging Face pipeline, the pretrained model continues a prompt in a couple of lines:
+With the Hugging Face pipeline, getting the trained model to continue a prompt takes a couple of lines:
 
 ```python
 from transformers import pipeline, set_seed
@@ -177,15 +177,15 @@ set_seed(42)
 print(generator("Hello, I'm a language model,", max_length=40)[0]["generated_text"])
 ```
 
-The output is fluent, grammatical English that wanders off topic, which is typical for a 124M-parameter base model: it continues documents rather than answering questions.
+The output is fluent, grammatical English that drifts off topic. That's normal for a 124M base model: it just continues documents, it doesn't answer questions.
 
 ## Key takeaways
 
-- GPT-2 small is 12 pre-norm transformer blocks of width 768 with 12 heads, a 1,024-token context and a 50,257-token BPE vocabulary: 124.4M parameters.
-- Its state dict maps one-to-one onto the architecture; shapes reveal every hyperparameter.
+- GPT-2 small is 12 pre-norm transformer blocks (layer norm comes before attention and the MLP) of width 768, with 12 heads, a 1,024-token context and a 50,257-token BPE vocabulary. That's 124.4M parameters.
+- Its state dict maps one-to-one onto the architecture, and the shapes tell you every setting.
 - The output layer shares its weights with the token embedding table, which saves about 30% of the parameters.
-- Position embeddings are learned and come out as smooth wave-like curves over position.
-- To load the official weights into your own code, match the parameter names, use tanh-approximated GELU, and transpose the `Conv1D` weights.
+- The position embeddings are learned, and they end up as smooth wave-like curves over position.
+- To load the official weights into your own code: match the parameter names, use the tanh version of GELU, and transpose the `Conv1D` weights.
 
 ## Resources
 

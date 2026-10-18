@@ -4,7 +4,7 @@ slug: grouped-cross-validation
 date: 2026-09-24
 topic: ML & Statistics
 tags: [cross-validation, data-leakage, spatial-autocorrelation, model-evaluation, group-k-fold]
-summary: "Why random K-fold gives over-optimistic scores when samples come in groups or are close in space, and how leave-group-out and spatial block cross-validation give an honest estimate."
+summary: "Why random K-fold gives scores that are too good when samples come in groups or sit close together in space, and how splitting by group or by spatial block gives an honest estimate."
 sources:
   - title: "Cross-validation strategies for data with temporal, spatial, hierarchical, or phylogenetic structure"
     author: "David R. Roberts et al."
@@ -27,25 +27,25 @@ sources:
 status: draft
 ---
 
-Cross-validation is how we guess a model's error on data it has never seen. That guess is only honest if the test fold is as "new" to the model as real future data will be. When samples come in groups (many rows per patient, per field, per city, per sensor) or sit close together in space, a random split puts near-copies of each test row into the training set. The score then measures memory, not generalization, and it can be wildly too good.
+Cross-validation is how we guess a model's error on data it hasn't seen. But that guess is only honest if the test fold is as "new" to the model as real future data will be. When samples come in groups (many rows per patient, per field, per city, per sensor) or sit close together in space, a random split puts near-copies of each test row into the training set. So the score ends up measuring memory, not generalization, and it can be way too good.
 
-## The hidden assumption in random K-fold
+## The assumption hiding in random K-fold
 
-K-fold cross-validation shuffles the rows, cuts them into $K$ folds, trains on $K-1$ folds and tests on the last one. The average test error estimates the prediction error
+K-fold cross-validation shuffles the rows, cuts them into $K$ folds, trains on $K-1$ folds and tests on the one left over. The average test error is an estimate of the prediction error
 
 $$
 \text{Err} = \mathbb{E}\big[L(Y, \hat f(X))\big],
 $$
 
-where $L$ is the loss (for example squared error), $\hat f$ is the fitted model and $(X, Y)$ is a fresh sample. "Fresh" is the key word. The estimate is unbiased only when test rows are independent of training rows, just like future data will be.
+where $L$ is the loss (for example squared error), $\hat f$ is the fitted model and $(X, Y)$ is a fresh sample. "Fresh" is the word that matters. The estimate is only unbiased when test rows are independent of training rows, the same way future data will be.
 
-Grouped data breaks this. Rows from the same group share things the features may not fully describe: the same instrument, the same weather, the same soil, the same person. Their errors are correlated. If one row of a group is in training and its sibling is in test, the model can score well on the sibling simply by recognizing the group. In production you will usually predict for a *new* group, where that shortcut does not exist.
+Grouped data breaks this. Rows from the same group share things the features may not fully capture: the same instrument, the same weather, the same soil, the same person. So their errors are correlated. If one row of a group is in training and its sibling is in test, the model can do well on the sibling just by recognizing the group. This is the part that clicked for me: in real use you'll usually predict for a *new* group, and that shortcut isn't there.
 
-Spatial data has the same problem without explicit groups. Tobler's "first law of geography" says near things are more related than distant things. A test point 5 m from a training point is not a fresh sample; it is almost a duplicate.
+Spatial data has the same problem, even without explicit groups. Tobler's "first law of geography" says near things are more related than distant things. A test point 5 m from a training point isn't really a fresh sample; it's almost a duplicate.
 
-## A small experiment
+## A small synthetic test
 
-The synthetic data below has 30 groups of 40 rows. The target depends on one real feature plus a group offset. Two extra features are a group "signature": they are almost constant within a group and carry no causal information, but they identify the group.
+The synthetic data below has 30 groups of 40 rows. The target depends on one real feature plus an offset per group. Two extra features act as a group "signature": they're almost constant inside a group and don't cause anything, but they give away which group a row belongs to.
 
 ```python
 import numpy as np
@@ -75,9 +75,9 @@ print(f"random K-fold RMSE: {r_random.mean():.2f}")   # 1.63
 print(f"group K-fold RMSE:  {r_group.mean():.2f}")    # 3.01
 ```
 
-Random K-fold reports an RMSE of 1.63. Group K-fold, which keeps every group entirely in train or entirely in test, reports 3.01. The second number is the one you would see on a new group.
+Random K-fold says the RMSE is 1.63. Group K-fold, which keeps each group completely in train or completely in test, says 3.01. The second number is what you'd actually see on a new group.
 
-The more dangerous effect shows up when you use cross-validation to *choose* features. Drop the signature features and rerun:
+The sneakier problem shows up when you use cross-validation to *choose* features. Drop the signature features and run it again:
 
 ```python
 X_real = X[:, :1]
@@ -86,22 +86,22 @@ print(-cross_val_score(model, X_real, y, cv=group_cv, groups=groups,
                        scoring=rmse).mean())                                 # 3.05
 ```
 
-Under random K-fold, the signature features look like a huge win (3.13 down to 1.63). Under group K-fold they do nothing useful (3.05 versus 3.01). A feature search driven by random K-fold would happily keep features that only help the model memorize groups. Model selection and hyperparameter tuning inherit the same bias: leaky validation rewards flexible models that memorize best.
+With random K-fold, the signature features look like a big win (3.13 down to 1.63). With group K-fold they do basically nothing (3.05 versus 3.01). So a feature search driven by random K-fold would happily keep features that only help the model memorize groups. Model selection and hyperparameter tuning get the same bias: leaky validation rewards whichever flexible model memorizes best.
 
-## Leave-group-out and its variants
+## Split by group, not by row
 
-The fix is to split by group, not by row. Common choices:
+The fix is simple to say: split by group, not by row. The common options:
 
-- **Group K-fold**: assign whole groups to $K$ folds, trying to balance fold sizes.
-- **Leave-one-group-out**: one fold per group. Most faithful when you have few groups, but expensive and noisy when groups are small.
+- **Group K-fold**: put whole groups into $K$ folds, trying to keep the fold sizes balanced.
+- **Leave-one-group-out**: one fold per group. Closest to the real situation when you have few groups, but slow and noisy when groups are small.
 - **Stratified group K-fold**: whole groups per fold, while also trying to keep the target (or class) distribution similar across folds.
-- **Nested grouped CV**: when you also tune hyperparameters, the inner tuning loop must be grouped too. Otherwise the tuning step leaks and the outer score is still optimistic.
+- **Nested grouped CV**: if you also tune hyperparameters, the inner tuning loop has to be grouped too. Otherwise the tuning leaks and the outer score is still too optimistic.
 
-Pick the group to match the deployment question. If the model will be used on new patients, group by patient. If it will be used on new regions, group by region, even if that makes the score look worse. The score should answer "how well will this work where I will actually use it?"
+Pick the group based on how the model will be used. If it'll be used on new patients, group by patient. If it'll be used on new regions, group by region, even if the score looks worse. The question the score should answer is: "how well will this work where I'll actually use it?"
 
-## Spatial blocking
+## Spatial blocks
 
-With spatial data there may be no natural group label. Roberts et al. (2017) recommend *block cross-validation*: cut space into blocks and treat each block as a group. The blocks should be larger than the range over which residuals are correlated. You can estimate that range from a variogram of the residuals, or simply try several block sizes and watch the error stop changing.
+With spatial data there's often no natural group label. Roberts et al. (2017) suggest *block cross-validation*: cut the map into blocks and treat each block as a group. The blocks should be bigger than the distance over which the residuals (the model's errors) are still correlated. You can estimate that distance from a variogram of the residuals, or just try a few block sizes and see when the error stops changing.
 
 ```python
 import numpy as np
@@ -120,26 +120,26 @@ for train_idx, test_idx in GroupKFold(n_splits=4).split(xy, groups=tile_id):
 
 ![Two maps of 600 random points. Left: random K-fold, where the four test folds are mixed everywhere so every test point has training neighbours. Right: spatial block folds, where each 25 m tile belongs entirely to one fold.](fig-random-vs-blocked-folds.png)
 
-In the left panel every test point has training neighbours a few metres away. In the right panel a test point's nearest training neighbour is usually in another tile. Variants include a buffer zone (drop training points within some distance of the test block) and checkerboard or systematic block layouts so every fold covers the whole range of conditions.
+In the left panel every test point has training neighbours a few metres away. In the right panel, a test point's nearest training neighbour is usually in another tile. There are variations too: a buffer zone (drop training points within some distance of the test block), or checkerboard and other regular block layouts so each fold covers the whole range of conditions.
 
-Ploton et al. (2020) showed how much this matters in practice. A large-scale biomass map looked accurate under random cross-validation, but spatial cross-validation showed that its predictive skill far from training data was close to none.
+Ploton et al. (2020) is a good example of why this matters. A large-scale biomass map looked accurate under random cross-validation, but spatial cross-validation showed it had almost no predictive skill far from the training data.
 
-## Costs and caveats
+## The catch
 
-Grouped and blocked CV are not free:
+Grouped and blocked CV have their own downsides:
 
-- **Higher variance.** With few groups, each fold's score depends a lot on which groups landed there. Report the spread across folds, not just the mean, and consider repeating with different group-to-fold assignments.
-- **Possible pessimism.** If blocks are much larger than needed, test folds can fall outside the range of the training data, so you measure extrapolation instead of the interpolation you will actually do.
-- **Unbalanced folds.** Groups differ in size. Check how many rows and groups each fold has.
-- **Preprocessing leaks too.** Scaling, imputation, target encoding and feature selection must be fitted inside each training fold. Wrap them in a pipeline so the grouped split covers them.
+- **Higher variance.** With few groups, each fold's score depends a lot on which groups ended up in it. Report the spread across folds, not just the mean, and maybe repeat with different group-to-fold assignments.
+- **Possible pessimism.** If the blocks are much bigger than needed, test folds can land outside the range of the training data. Then you're measuring extrapolation instead of the interpolation you'll really be doing.
+- **Unbalanced folds.** Groups have different sizes. Check how many rows and groups end up in each fold.
+- **Preprocessing leaks too.** Scaling, imputation, target encoding and feature selection all have to be fitted inside each training fold. Put them in a pipeline so the grouped split covers them.
 
 ## Key takeaways
 
-- Random K-fold assumes test rows are independent of training rows. Grouped or spatially clustered data breaks that assumption.
-- Leaky validation is not just optimistic; it also picks the wrong features and the wrong models.
-- Split by the unit you will meet in deployment: group K-fold, leave-one-group-out, or spatial blocks.
-- Make blocks larger than the residual correlation range, and report the spread across folds.
-- Every data-dependent step (tuning, scaling, encoding) must sit inside the grouped split.
+- Random K-fold assumes test rows are independent of training rows. Grouped or spatially clustered data breaks that.
+- Leaky validation isn't just too optimistic; it also picks the wrong features and the wrong models.
+- Split by the unit you'll meet in real use: group K-fold, leave-one-group-out, or spatial blocks.
+- Make blocks bigger than the range where residuals are correlated, and report the spread across folds.
+- Every step that learns from data (tuning, scaling, encoding) has to sit inside the grouped split.
 
 ## Resources
 

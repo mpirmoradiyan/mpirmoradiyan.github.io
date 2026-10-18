@@ -4,7 +4,7 @@ slug: gpt-from-scratch
 date: 2025-01-09
 topic: NLP & LLMs
 tags: [gpt, transformer, decoder-only, layer-normalization, residual-connections, dropout, pytorch]
-summary: "How a character-level GPT is assembled from a bigram baseline by adding position embeddings, self-attention, multiple heads, feed-forward layers, residual connections and layer normalization, with the validation loss measured after each step."
+summary: "How a small character-level GPT grows out of a bigram model by adding position embeddings, self-attention, several heads, feed-forward layers, residual connections and layer norm, checking the validation loss after each step."
 sources:
   - title: "Let's build GPT: from scratch, in code, spelled out"
     author: "Andrej Karpathy (Neural Networks: Zero to Hero)"
@@ -31,19 +31,19 @@ sources:
 status: draft
 ---
 
-A GPT is a stack of identical transformer blocks on top of an embedding layer, trained to predict the next token. That one-sentence description hides a handful of design choices, and each one earns its place. In this exercise I started from the simplest possible language model and added the pieces one by one, measuring the validation loss after each change. The data is Tiny Shakespeare, about 1.1 million characters of plays, modelled at the character level with a vocabulary of 65 symbols.
+A GPT is a stack of identical transformer blocks on top of an embedding layer, trained to guess the next token. That one sentence hides a handful of design choices, and I wanted to see what each one actually does. So I started from the simplest possible language model and added the pieces one at a time, checking the validation loss after each change. The data is Tiny Shakespeare, about 1.1 million characters of plays, handled one character at a time with a vocabulary of 65 symbols.
 
 ## The setup
 
-- **Tokens**: single characters, mapped to integers 0-64.
+- **Tokens**: single characters, turned into integers 0-64.
 - **Split**: the first 90% of the text for training, the last 10% for validation.
-- **Batches**: random chunks of `block_size` characters; the targets are the same chunks shifted by one (see the [text data note](/notes/text-data-for-llms/)).
-- **Loss**: cross-entropy between the logits at every position and the next character. Uniform guessing gives $\ln 65 \approx 4.17$.
-- **Evaluation**: the average loss over 200 random batches of each split, in `model.eval()` mode and under `torch.no_grad()`. A single batch is far too noisy to compare models.
+- **Batches**: random chunks of `block_size` characters. The targets are the same chunks shifted by one (see the [text data note](/notes/text-data-for-llms/)).
+- **Loss**: cross-entropy between the logits at every position and the next character. Pure guessing gives $\ln 65 \approx 4.17$.
+- **Evaluation**: the average loss over 200 random batches from each split, in `model.eval()` mode and under `torch.no_grad()`. One batch is way too noisy to compare models with.
 
 ## Step 0: the bigram baseline
 
-The simplest model is a single embedding table of size (65, 65): row $i$ holds the logits for the character that follows character $i$. It ignores all context except the current character.
+The simplest model is one embedding table of size (65, 65). Row $i$ holds the logits (raw scores) for the character that comes after character $i$. It ignores everything except the current character.
 
 ```python
 class Bigram(nn.Module):
@@ -54,9 +54,9 @@ class Bigram(nn.Module):
         return self.table(idx)               # (B, T, vocab) logits
 ```
 
-Trained with AdamW it plateaus at a validation loss of about **2.48** and produces gibberish with roughly the right letter frequencies.
+Trained with AdamW it gets stuck at a validation loss of about **2.48** and writes gibberish, though with roughly the right letter frequencies.
 
-Generation is the same for every model in this note: run the model on the context, take the logits at the last position, sample, append, repeat. Once the model has position embeddings, the context must be cropped to the last `block_size` tokens, because there is no position embedding beyond that.
+Generating text works the same way for every model here: run the model on the context, take the logits at the last position, sample a character, append it, repeat. Once the model has position embeddings, you have to cut the context down to the last `block_size` tokens, because there's no position embedding past that.
 
 ```python
 @torch.no_grad()
@@ -70,7 +70,7 @@ def generate(model, idx, max_new_tokens, block_size):
 
 ## The path from bigram to GPT
 
-Steps 1 to 4 below use `block_size = 8`, embedding size 32, batch size 32, learning rate $10^{-3}$ and 5,000 steps, so only the architecture changes. (The bigram baseline was trained with a learning rate of $10^{-2}$ for 3,000 steps; it had converged.) The losses are the last values logged, about step 4,500 to 5,000.
+Steps 1 to 4 below all use `block_size = 8`, embedding size 32, batch size 32, learning rate $10^{-3}$ and 5,000 steps, so the only thing that changes is the architecture. (The bigram baseline was trained with a learning rate of $10^{-2}$ for 3,000 steps, and it had already stopped improving.) The losses are the last values logged, around step 4,500 to 5,000.
 
 | step | change | val loss |
 |---|---|---|
@@ -80,11 +80,11 @@ Steps 1 to 4 below use `block_size = 8`, embedding size 32, batch size 32, learn
 | 3 | 3 transformer blocks: attention + feed-forward, with residual connections | 2.11 |
 | 4 | layer normalization before each sub-layer, and a final layer norm | 2.06 |
 
-**Step 1: let tokens talk.** Each position gets a token embedding plus a learned position embedding, then one head of [causal self-attention](/notes/causal-attention/), then a linear layer to logits. Now a character can use the previous seven characters, not just one.
+**Step 1: let the tokens talk.** Each position gets a token embedding plus a learned position embedding, then one head of [causal self-attention](/notes/causal-attention/), then a linear layer to get logits. Now a character can use the seven characters before it, not just one.
 
-**Step 2: several heads.** [Multi-head attention](/notes/multi-head-attention/) lets different heads track different kinds of relationships. The total width stays 32.
+**Step 2: several heads.** [Multi-head attention](/notes/multi-head-attention/) lets different heads keep track of different kinds of relationships. The total width stays 32.
 
-**Step 3: blocks with computation and shortcuts.** Attention is *communication*: tokens gather information from each other. After gathering, each token needs to *compute* on what it collected. That is the job of a small **feed-forward network** applied to each position separately, with a hidden layer four times wider than the model:
+**Step 3: blocks that think, plus shortcuts.** The way I think about it: attention is *communication*, where tokens collect information from each other. After that, each token needs to *think* about what it collected. That's the job of a small **feed-forward network** applied to each position on its own, with a hidden layer four times wider than the model:
 
 ```python
 class FeedForward(nn.Module):
@@ -96,18 +96,18 @@ class FeedForward(nn.Module):
         return self.net(x)
 ```
 
-Stacking several blocks makes the network deep, and deep networks are hard to optimize. **Residual connections** fix this: each sub-layer adds its output to its input, `x = x + sublayer(x)`, instead of replacing it. During backpropagation, the addition passes the gradient straight through to earlier layers, so there is always a clean path from the loss to the first block. At initialization the sub-layers contribute little, and the network behaves almost like a shallow one; the blocks then learn to add useful corrections. This step gave the biggest single improvement.
+Stacking several blocks makes the network deep, and deep networks are hard to train. **Residual connections** fix this. Each sub-layer adds its output to its input, `x = x + sublayer(x)`, instead of replacing it. In backprop, the addition passes the gradient straight through to earlier layers, so there's always a clean path from the loss back to the first block. At the start the sub-layers add very little, so the network acts almost like a shallow one, and then the blocks slowly learn to add useful corrections. This step gave the biggest single jump.
 
-**Step 4: layer normalization.** [Batch normalization](/notes/batch-normalization/) normalizes each feature across the batch. **Layer normalization** normalizes each token's vector across its own features:
+**Step 4: layer normalization.** [Batch normalization](/notes/batch-normalization/) normalizes each feature across the batch. **Layer normalization** flips that around: it normalizes each token's vector across its own features:
 
 $$
 \operatorname{LN}(x) = \gamma \odot \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} + \beta,
 \qquad \mu = \frac{1}{C}\sum_{j=1}^{C} x_j,\quad \sigma^2 = \frac{1}{C}\sum_{j=1}^{C}(x_j - \mu)^2
 $$
 
-Here $x$ is one token's vector of $C$ features, $\gamma$ and $\beta$ are a learned gain and shift, and $\epsilon$ is a small constant. Because the statistics come from a single token, there is no dependence on the other examples in the batch, no running averages, and identical behaviour in training and inference. That suits sequences of varying length well. I checked this on a toy (32, 100) tensor: after layer norm, each row had mean 0 and standard deviation 1, while the columns did not.
+Here $x$ is one token's vector of $C$ features, $\gamma$ and $\beta$ are a learned gain and shift, and $\epsilon$ is a small constant. Since the statistics come from a single token, it doesn't depend on the other examples in the batch, there are no running averages, and it behaves the same in training and inference. That fits sequences of different lengths nicely. I checked this on a toy (32, 100) tensor: after layer norm, each row had mean 0 and standard deviation 1, but the columns didn't.
 
-The original transformer applied layer norm *after* each residual addition. GPT-2 and later models apply it *before* each sub-layer ("pre-norm"), which trains more stably:
+The original transformer put layer norm *after* each residual addition. GPT-2 and later models put it *before* each sub-layer ("pre-norm"), which trains more smoothly:
 
 ```python
 class Block(nn.Module):
@@ -122,11 +122,11 @@ class Block(nn.Module):
         return x
 ```
 
-The full model is token embedding + position embedding, a stack of blocks, a final layer norm, and a linear "language-model head" that produces the logits.
+So the full model is: token embedding + position embedding, a stack of blocks, a final layer norm, and a linear "language-model head" that gives the logits.
 
 ## Scaling up, and a lesson about overfitting
 
-Then I scaled the same code up: context of 256 characters, embedding size 384, 6 heads, 6 blocks, dropout 0.2, learning rate $3 \times 10^{-4}$, batch size 64. All linear and embedding weights were initialized from $\mathcal{N}(0, 0.02^2)$. That is 10.8 million parameters, and it needs a GPU.
+Then I scaled the same code up: a context of 256 characters, embedding size 384, 6 heads, 6 blocks, dropout 0.2, learning rate $3 \times 10^{-4}$, batch size 64. All linear and embedding weights started from $\mathcal{N}(0, 0.02^2)$. That's 10.8 million parameters, and you need a GPU for it.
 
 | step | train loss | val loss |
 |---|---|---|
@@ -135,21 +135,21 @@ Then I scaled the same code up: context of 256 characters, embedding size 384, 6
 | 3,000 | 1.07 | **1.48** |
 | 5,000 | 0.86 | 1.56 |
 
-The validation loss bottomed out at about **1.48** around step 3,000. After that the training loss kept falling while the validation loss rose: the model started memorizing the training plays. Even with dropout, 10.8M parameters can memorize 1M characters. The fix is to keep the checkpoint with the best validation loss (early stopping), use more data, or regularize more.
+The validation loss hit its lowest point, about **1.48**, around step 3,000. After that the training loss kept dropping while the validation loss went up: the model had started memorizing the training plays. Even with dropout, 10.8M parameters are enough to memorize 1M characters. The fix is to keep the checkpoint with the best validation loss (early stopping), use more data, or add more regularization.
 
-The samples changed dramatically along the way. The bigram produced `xiv&dbHU?YhSqNY!`. The final model produced text with the shape of a play: speaker names in capitals, line breaks, mostly real words and something like iambic rhythm ("To prevent it, as I love this country's cause."), even though the sentences make no sense.
+The samples changed a lot along the way, and that was the fun part. The bigram wrote `xiv&dbHU?YhSqNY!`. The final model wrote text that looks like a play: speaker names in capitals, line breaks, mostly real words and something like Shakespeare's rhythm ("To prevent it, as I love this country's cause."), even though the sentences make no sense.
 
-## What is still missing compared to ChatGPT
+## What's still missing compared to ChatGPT
 
-This model is a **decoder-only** transformer, like GPT: it has no encoder and no cross-attention, because it only continues text. It is a pretrained model in miniature. A chat assistant adds a much larger pretraining run on a subword tokenizer, then fine-tuning on conversations and preference training, which turn a document completer into an assistant.
+This model is a **decoder-only** transformer, like GPT. It has no encoder and no cross-attention, because all it does is continue text. It's basically a tiny pretrained model. A chat assistant adds a much bigger pretraining run with a subword tokenizer, then fine-tuning on conversations and training on human preferences. Those later steps are what turn a "finish this document" model into an assistant.
 
 ## Key takeaways
 
 - A GPT is token + position embeddings, a stack of blocks (masked multi-head attention and a feed-forward MLP), a final layer norm and a linear head.
-- Attention moves information between positions; the feed-forward layer processes it within each position.
-- Residual connections give gradients a direct path through depth and were the largest single gain here.
-- Layer norm normalizes each token over its features, so it does not depend on the batch; GPT-style models place it before each sub-layer.
-- Watch the validation loss: the 10.8M-parameter model was best at step 3,000 (1.48) and overfit afterwards.
+- Attention moves information between positions. The feed-forward layer works on it inside each position.
+- Residual connections give gradients a direct path through all the layers, and they were the biggest single gain here.
+- Layer norm normalizes each token over its own features, so it doesn't depend on the batch. GPT-style models put it before each sub-layer.
+- Keep an eye on the validation loss: the 10.8M-parameter model was best at step 3,000 (1.48) and overfit after that.
 
 ## Resources
 

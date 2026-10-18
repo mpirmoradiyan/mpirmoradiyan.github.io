@@ -4,7 +4,7 @@ slug: shoelace-formula-polygon-area
 date: 2026-05-21
 topic: Geospatial & GIS
 tags: [geometry, polygons, area, orientation, numpy, numerical-precision]
-summary: "How the shoelace formula turns a list of vertices into an area, why it works (trapezoids and cross products), what its sign tells you, and the two traps: self-intersecting rings and coordinates far from the origin."
+summary: "How the shoelace formula turns a list of corners into an area, why it works (trapezoids and cross products), what its sign tells you, and two traps: self-crossing rings and coordinates far from the origin."
 sources:
   - title: "Shoelace formula"
     author: "Wikipedia"
@@ -21,27 +21,27 @@ sources:
 status: draft
 ---
 
-Every time a GIS tool reports the area of a field, or OpenCV's `contourArea` measures a blob, the same small formula runs underneath. Given the corners of a polygon in order, it returns the exact area in one pass over the vertices, with no triangulation and no grid. It also returns a sign, which tells you whether the vertices go clockwise or counter-clockwise. That sign is useful on its own.
+Every time a GIS tool reports the area of a field, or OpenCV's `contourArea` measures a blob, the same little formula is running underneath. Give it the corners of a polygon in order, and it gives you the exact area in one pass over the corners. No triangles to build, no grid. It also gives you a sign, which tells you whether the corners go clockwise or counter-clockwise. That sign turns out to be useful on its own.
 
 ## The formula
 
-Take a simple polygon (its boundary does not cross itself) with vertices $(x_1, y_1), \dots, (x_n, y_n)$ listed in order around the boundary. Treat the list as circular, so vertex $n+1$ is vertex $1$. Then
+Take a simple polygon (its border doesn't cross itself) with vertices $(x_1, y_1), \dots, (x_n, y_n)$ listed in order around the border. Treat the list as a loop, so vertex $n+1$ is vertex $1$. Then
 
 $$
 A_{\text{signed}} = \frac{1}{2} \sum_{i=1}^{n} \left( x_i\, y_{i+1} - x_{i+1}\, y_i \right), \qquad A = |A_{\text{signed}}|.
 $$
 
-The name comes from the way you compute it by hand. Write the coordinates in two columns, repeat the first vertex at the bottom, then multiply along the down-right diagonals ($x_i y_{i+1}$) and the down-left diagonals ($x_{i+1} y_i$). The criss-crossing lines look like the laces of a shoe. Subtract the second sum from the first and halve it.
+The name comes from doing it by hand. Write the coordinates in two columns, repeat the first vertex at the bottom, then multiply along the down-right diagonals ($x_i y_{i+1}$) and the down-left diagonals ($x_{i+1} y_i$). The criss-crossing lines look like shoelaces. Subtract the second sum from the first and halve it.
 
 ## Why it works: two pictures
 
 ![Left: each edge sweeps a trapezoid down to the x-axis; trapezoids under the top edges are added and those under the bottom edges are subtracted. Right: each edge forms a triangle with the origin; triangles swept counter-clockwise count positive and clockwise ones count negative.](fig-shoelace-decompositions.png)
 
-**Trapezoids.** Drop a vertical line from both ends of each edge down to the x-axis. Each edge then bounds a trapezoid with signed area $\tfrac12 (x_i - x_{i+1})(y_i + y_{i+1})$. For a counter-clockwise polygon the top edges run right to left, so their trapezoids are positive. The bottom edges run left to right, so theirs are negative. Adding them leaves exactly the region between the top and bottom boundaries, which is the polygon. Expanding the product and summing over all edges gives the formula above, because the $x_i y_i$ terms cancel.
+**Trapezoids.** Drop a vertical line from both ends of each edge down to the x-axis. Each edge then bounds a trapezoid with signed area $\tfrac12 (x_i - x_{i+1})(y_i + y_{i+1})$. For a counter-clockwise polygon the top edges run right to left, so their trapezoids come out positive. The bottom edges run left to right, so theirs are negative. Add them up and what's left is exactly the region between the top and bottom borders, which is the polygon. Expand the product, sum over all edges, and you get the formula above, because the $x_i y_i$ terms cancel.
 
-**Triangles from the origin.** The term $x_i y_{i+1} - x_{i+1} y_i$ is the 2D cross product of the vectors from the origin to vertex $i$ and to vertex $i+1$. Half of it is the signed area of the triangle (origin, $v_i$, $v_{i+1}$): positive when the triangle is swept counter-clockwise, negative when clockwise. The triangles that reach outside the polygon are counted once with each sign and cancel. Only the polygon's own area survives. The origin can be any point, even one outside the polygon, and the result is the same.
+**Triangles from the origin.** This is the picture that made it click for me. The term $x_i y_{i+1} - x_{i+1} y_i$ is the 2D cross product of the vectors from the origin to vertex $i$ and to vertex $i+1$. Half of it is the signed area of the triangle (origin, $v_i$, $v_{i+1}$): positive when the triangle is swept counter-clockwise, negative when clockwise. The triangles that reach outside the polygon get counted once with each sign and cancel. Only the polygon's own area is left. The origin can be any point, even one outside the polygon, and the answer is the same.
 
-Both pictures are discrete versions of Green's theorem, which says that the area of a region equals the line integral $\tfrac12 \oint (x\,dy - y\,dx)$ around its boundary. On a straight edge that integral is exactly $\tfrac12 (x_i y_{i+1} - x_{i+1} y_i)$.
+Both pictures are discrete versions of Green's theorem, which says the area of a region equals the line integral $\tfrac12 \oint (x\,dy - y\,dx)$ around its border. On a straight edge, that integral is exactly $\tfrac12 (x_i y_{i+1} - x_{i+1} y_i)$.
 
 ## Code
 
@@ -65,23 +65,23 @@ l_shape = [(0, 0), (3, 0), (3, 1), (1, 1), (1, 3), (0, 3)]
 print(shoelace(l_shape))                     # 5.0  (works for non-convex shapes)
 ```
 
-The formula needs no convexity: the L-shape above is concave and the answer is exact. You also do not need to repeat the first vertex at the end of the list. If you do repeat it, the extra term is $x_1 y_1 - x_1 y_1 = 0$, so the result does not change.
+The shape doesn't have to be convex: the L-shape above has a dent and the answer is still exact. You also don't need to repeat the first vertex at the end of the list. If you do, the extra term is $x_1 y_1 - x_1 y_1 = 0$, so nothing changes.
 
-On a regular 500,000-gon inscribed in a circle of radius 10, a plain Python loop and the NumPy version both give 314.15926535, close to $\pi r^2$ (the polygon is slightly smaller than the circle). On my laptop the NumPy version was about 35 times faster: 3.5 ms against 124 ms.
+On a regular 500,000-gon inside a circle of radius 10, a plain Python loop and the NumPy version both give 314.15926535, close to $\pi r^2$ (the polygon is a tiny bit smaller than the circle). On my laptop the NumPy version was about 35 times faster: 3.5 ms against 124 ms.
 
 ## The sign is a free orientation test
 
-Counter-clockwise vertex order gives a positive signed area, and clockwise order gives a negative one (in a y-up coordinate system). This is how libraries check and fix winding order:
+Counter-clockwise order gives a positive signed area, and clockwise order gives a negative one (with the y-axis pointing up). This is how libraries check and fix the winding order:
 
 - The GeoJSON standard (RFC 7946) asks for counter-clockwise outer rings and clockwise holes. Shapely's `orient()` and many GIS tools use the signed area to enforce this.
-- A polygon with holes has area $|A_{\text{outer}}| - \sum |A_{\text{hole}}|$. If the rings follow the convention, you can simply add the signed areas.
-- In image coordinates the y-axis points down, so the visual sense flips: a ring that looks clockwise on screen has a positive signed area. This is a common source of confusion when contours come from an image and are later drawn on a map.
+- A polygon with holes has area $|A_{\text{outer}}| - \sum |A_{\text{hole}}|$. If the rings follow the convention, you can just add up the signed areas.
+- In image coordinates the y-axis points down, so the visual direction flips: a ring that looks clockwise on screen has a positive signed area. This causes a lot of confusion when contours come from an image and later get drawn on a map.
 
 ## Two traps
 
-**Self-intersecting rings.** The formula assumes a simple polygon. For a "bow tie" such as $(0,0), (2,2), (2,0), (0,2)$, the two lobes have opposite orientation and cancel, so the formula returns 0. In general it returns the sum of each region's area times its winding number, which is rarely what you want. Check validity first and repair the shape if needed (see [Polygons from detections: fixing invalid shapes](/notes/polygon-validity-and-shape-metrics/)).
+**Self-crossing rings.** The formula assumes a simple polygon. For a "bow tie" like $(0,0), (2,2), (2,0), (0,2)$, the two halves go in opposite directions and cancel, so the formula returns 0. In general it returns the sum of each region's area times its winding number, which is rarely what you want. Check validity first and fix the shape if needed (see [Polygons from detections: fixing invalid shapes](/notes/polygon-validity-and-shape-metrics/)).
 
-**Coordinates far from the origin.** Each product $x_i y_{i+1}$ can be huge while the difference between products is small. With 64-bit floats this causes catastrophic cancellation:
+**Coordinates far from the origin.** Each product $x_i y_{i+1}$ can be huge while the difference between products is small. With 64-bit floats, that means you lose most of your precision when you subtract (catastrophic cancellation):
 
 ```python
 far = np.array(l_shape) + 1e8          # same L-shape, shifted far away
@@ -89,13 +89,13 @@ print(shoelace(far))                    # 8.0, wrong
 print(shoelace(far - far.mean(axis=0))) # 5.0, right after centring
 ```
 
-Projected map coordinates (UTM eastings and northings in the hundreds of thousands to millions of metres) are large enough for this to cost precision on small polygons. The fix is cheap: subtract one vertex or the mean from all coordinates before applying the formula. Area does not change under translation, and the products become small.
+Projected map coordinates (UTM eastings and northings in the hundreds of thousands to millions of metres) are big enough for this to hurt on small polygons. The fix is cheap: subtract one vertex, or the mean, from all coordinates before using the formula. Moving a shape doesn't change its area, and the products become small.
 
-One more caveat for GIS: the formula works in the plane. Applied to raw longitude and latitude it gives "square degrees", which mean nothing physically. Project to an equal-area or a suitable local projected coordinate system first, or use a geodesic area routine for large regions.
+One more GIS catch: the formula works on a flat plane. Use it on raw longitude and latitude and you get "square degrees", which don't mean anything physically. Project to an equal-area or a suitable local projected coordinate system first, or use a geodesic area function for big regions.
 
-## Related quantities from the same sums
+## More from the same sums
 
-The same cross-product terms give the polygon's centroid:
+The same cross-product terms also give you the polygon's centroid:
 
 $$
 c_x = \frac{1}{6A_{\text{signed}}} \sum_{i} (x_i + x_{i+1})\, c_i, \qquad
@@ -103,15 +103,15 @@ c_y = \frac{1}{6A_{\text{signed}}} \sum_{i} (y_i + y_{i+1})\, c_i, \qquad
 c_i = x_i y_{i+1} - x_{i+1} y_i .
 $$
 
-So one loop over the vertices gives area, orientation and centroid together, which is why the formula sits at the heart of most polygon libraries.
+So one loop over the corners gives you area, orientation and centroid together, which is why this formula sits at the heart of most polygon libraries.
 
 ## Key takeaways
 
-- Area of a simple polygon $= \tfrac12 \left|\sum_i (x_i y_{i+1} - x_{i+1} y_i)\right|$, one pass, convex or not.
-- It is a sum of signed trapezoids or signed triangles (Green's theorem); the parts outside the polygon cancel.
-- The sign gives the winding order: positive for counter-clockwise in a y-up system.
-- Self-intersecting rings give meaningless results; validate first.
-- Centre the coordinates before computing, especially with large projected map coordinates, to avoid cancellation errors.
+- Area of a simple polygon $= \tfrac12 \left|\sum_i (x_i y_{i+1} - x_{i+1} y_i)\right|$, in one pass, convex or not.
+- It's a sum of signed trapezoids or signed triangles (Green's theorem). The parts outside the polygon cancel.
+- The sign gives the winding order: positive for counter-clockwise when y points up.
+- Self-crossing rings give meaningless results, so check validity first.
+- Centre the coordinates before computing, especially with big projected map coordinates, to avoid cancellation errors.
 
 ## Resources
 
