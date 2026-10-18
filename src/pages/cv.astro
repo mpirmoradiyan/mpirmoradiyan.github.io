@@ -3,8 +3,8 @@ import Base from "../layouts/Base.astro";
 import { profile } from "../data/profile";
 const arboair = [
   "Designed and lead the company's computer-vision platform: one config-driven system covering data ingestion, training-data preparation, model training, geospatial evaluation and GPU inference in production.",
-  "Train transformer-based segmentation models for tree species and forest-damage mapping: Mask2Former with DINOv3 and Swin backbones for semantic, instance and panoptic tasks, alongside Panoptic FPN, Mask R-CNN, UNet++ and DeepLabV3+.",
-  "Built self-supervised pretraining on unlabelled aerial imagery (DINO+iBOT, MoCo v3, MAE) and semi-supervised pseudo-labelling to make the most of scarce annotations.",
+  "Train modern deep-learning segmentation models for tree species and forest-damage mapping, from transformer-based architectures with foundation-model backbones to classic CNNs, across semantic, instance and panoptic tasks.",
+  "Built self-supervised pretraining on unlabelled aerial imagery and semi-supervised pseudo-labelling to make the most of scarce annotations.",
   "Built the training-data foundation: a versioned data lake with provenance, intake of finished annotation jobs, reproducible dataset recipes and leakage-safe splits.",
   "Made training and inference fast on GPUs: streaming tiled inference, asynchronous data loading and GPU preprocessing.",
   "Turn pixel predictions into GIS-ready maps: tiled inference over very large GeoTIFFs, vectorisation, geometry repair and certainty scoring.",
@@ -14,7 +14,7 @@ const arboair = [
   "As AI lead, set up an AI-agent-assisted engineering workflow and designed an AI-agent research process supporting the company's strategy work.",
 ];
 const skills = [
-  ["Computer vision", "Semantic, instance and panoptic segmentation; object detection; vision transformers (DINOv2/v3, Swin, Mask2Former); self- and semi-supervised learning; OpenCV"],
+  ["Computer vision", "Semantic, instance and panoptic segmentation; object detection; vision transformers and foundation-model backbones; self- and semi-supervised learning; OpenCV"],
   ["Deep learning", "PyTorch, Hugging Face Transformers, Detectron2, segmentation-models-pytorch, timm; TensorFlow/Keras"],
   ["Geospatial", "Rasterio, GDAL, GeoPandas, Shapely, PDAL; LiDAR; orthorectification and photogrammetry; GeoTIFF/GeoPackage"],
   ["Data & tooling", "Python, NumPy, Polars, DuckDB, Pydantic, pytest, Streamlit, Dash, CVAT"],

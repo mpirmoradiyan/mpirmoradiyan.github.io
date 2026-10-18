@@ -34,7 +34,7 @@ export const chapters = [
 
 export const highlights = [
   "Designed and lead the company's computer-vision platform: one system from data ingestion and training data to model training, geospatial evaluation and GPU inference in production.",
-  "Train transformer-based segmentation models for tree species and forest-damage mapping (Mask2Former with DINOv3 and Swin backbones, Panoptic FPN, Mask R-CNN, UNet++).",
+  "Train modern deep-learning segmentation models, from transformer-based architectures with foundation-model backbones to classic CNNs, for tree species and forest-damage mapping.",
   "Built self-supervised pretraining on unlabelled aerial imagery and semi-supervised pseudo-labelling to make the most of scarce annotations.",
   "Turn pixel predictions into GIS-ready maps: tiled inference over very large GeoTIFFs, vectorisation, geometry repair and certainty scoring.",
   "Built the orthomosaic pipeline from drone photos: LiDAR terrain models, georeferencing from drone metadata, seamline mosaicking and true orthophotos.",
