@@ -2,7 +2,7 @@
 title: "Parallel Python: threads, processes, asyncio and the GIL"
 slug: python-parallelism-gil
 date: 2023-07-14
-topic: Algorithms
+topic: Programming & Performance
 tags: [python, parallelism, concurrency, gil, multiprocessing, asyncio, map-reduce, performance]
 summary: "When threads, processes or asyncio actually make Python code faster, why a process pool can be slower than a plain loop, and how map-reduce sits on top of Pool.map."
 sources:

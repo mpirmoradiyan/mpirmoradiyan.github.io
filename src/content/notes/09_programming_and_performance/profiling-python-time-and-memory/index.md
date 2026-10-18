@@ -2,7 +2,7 @@
 title: "Profiling Python: finding where the time and the memory go"
 slug: profiling-python-time-and-memory
 date: 2023-05-18
-topic: Algorithms
+topic: Programming & Performance
 tags: [python, profiling, performance, cprofile, line-profiler, timeit, memory, tracemalloc]
 summary: "How to measure where a Python program spends its time (cProfile, line_profiler, timeit) and its memory (sys.getsizeof, deep sizes, tracemalloc), and the traps in each measurement."
 sources:

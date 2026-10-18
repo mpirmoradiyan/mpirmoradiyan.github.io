@@ -5,7 +5,7 @@ import path from "node:path";
 
 const SRC = path.resolve("../100_my_writings_for_learning/notes");
 const DST = path.resolve("src/content/notes");
-const PRIVATE_FIELDS = ["original", "original_language"];
+const PRIVATE_FIELDS = ["original", "original_language", "publish"];
 
 if (!fs.existsSync(SRC)) {
   console.log(`sync-notes: ${SRC} not found, keeping existing src/content/notes`);
@@ -14,6 +14,7 @@ if (!fs.existsSync(SRC)) {
 fs.rmSync(DST, { recursive: true, force: true });
 
 let count = 0;
+let skipped = 0;
 for (const topic of fs.readdirSync(SRC).sort()) {
   const tdir = path.join(SRC, topic);
   if (!fs.statSync(tdir).isDirectory()) continue;
@@ -21,12 +22,14 @@ for (const topic of fs.readdirSync(SRC).sort()) {
     const ndir = path.join(tdir, slug);
     const md = path.join(ndir, "index.md");
     if (!fs.existsSync(md)) continue;
-    const out = path.join(DST, topic, slug);
-    fs.mkdirSync(out, { recursive: true });
     let text = fs.readFileSync(md, "utf8");
     // drop private front-matter fields (single line or indented block that follows)
     const end = text.indexOf("\n---", 3);
     let fm = text.slice(0, end);
+    // notes marked `publish: false` stay local only
+    if (/^publish:\s*false\s*$/m.test(fm)) { skipped++; continue; }
+    const out = path.join(DST, topic, slug);
+    fs.mkdirSync(out, { recursive: true });
     const body = text.slice(end);
     for (const f of PRIVATE_FIELDS) {
       fm = fm.replace(new RegExp(`^${f}:.*(\\n[ \\t]+.*)*`, "m"), "");
@@ -43,4 +46,4 @@ for (const topic of fs.readdirSync(SRC).sort()) {
     count++;
   }
 }
-console.log(`sync-notes: ${count} notes synced`);
+console.log(`sync-notes: ${count} notes synced, ${skipped} kept local (publish: false)`);
