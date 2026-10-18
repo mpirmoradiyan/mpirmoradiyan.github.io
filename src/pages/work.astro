@@ -60,6 +60,16 @@ const field = [
         </ul>
       </div>
     </div>
+    <details class="pubs card">
+      <summary>Earlier publications and reports from the field years (in Persian)</summary>
+      <p class="muted small">Recognised as one of the company's best seismic acquisition supervisors in 2015. I supervised acquisition in more than five oil fields, with both dynamite and vibroseis sources, and mentored junior geophysicists.</p>
+      <ul>
+        <li>Kimassi, Mansuri, Pirmoradiyan. Applying the asymmetrical extended-patch method to improve data quality in a 3D seismic acquisition project. <em>Journal of Exploration &amp; Production Oil &amp; Gas</em>, No. 143, 2017.</li>
+        <li>Kimassi, Paryab, Pirmoradiyan, Puladzadeh. Optimising a 3D seismic survey design to acquire high-quality data. NISOC <em>Journal of Knowledge Management</em>, 2016.</li>
+        <li>Pirmoradiyan, Tayyebi. The origin of noise events in surface seismic data and how to reduce them. NISOC <em>Journal of Knowledge Management</em>, 2016.</li>
+        <li>Internal technical reports (2012–2016) on 3D survey-design scouting, receiver-array design, acquisition in an industrial and densely populated area, and peak-particle-velocity safety distances.</li>
+      </ul>
+    </details>
     <div class="gallery">
       {field.map(([f, alt]) => (
         <figure class="reveal"><img src={`/images/field/${f}.jpg`} alt={alt} loading="lazy" /><figcaption>{alt}</figcaption></figure>
@@ -82,6 +92,10 @@ const field = [
   .carry h3 { margin-top: 0; }
   .carry ul { padding-left: 1.1em; margin: 0; }
   .carry li { margin: .5em 0; font-size: .95rem; }
+  .pubs { padding: 1rem 1.3rem; margin-top: 1.5rem; }
+  .pubs summary { cursor: pointer; font-weight: 600; }
+  .pubs ul { padding-left: 1.1em; margin: .6rem 0 0; }
+  .pubs li { margin: .45em 0; font-size: .93rem; }
   .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; margin-top: 2rem; }
   .gallery figure { margin: 0; border-radius: 12px; overflow: hidden; background: var(--bg-soft); border: 1px solid var(--line); }
   .gallery img { aspect-ratio: 4 / 3; object-fit: cover; width: 100%; }
