@@ -24,7 +24,7 @@ export const journey: Stop[] = [
   },
   {
     years: "2005 – 2019", kind: "work", title: "Seismic Data Acquisition QC Supervisor, junior to senior", org: "National Iranian South Oil Company (NISOC)", place: "Khuzestan, Iran",
-    url: "https://www.nisoc.ir", image: "/images/field/vibroseis-fleet-at-sunset.jpg", imageAlt: "A fleet of vibroseis trucks on a seismic line at sunset",
+    url: "https://www.nisoc.ir", image: "/images/journey/nisoc-field-collage.jpg", imageAlt: "Collage of my field photos: vibroseis trucks at sunset, recording-system QC monitors, a geophone array and surveying in sand dunes",
     story: "Fourteen years in the field: designing and quality-checking 2D and 3D land seismic surveys, where every recording had to be clean before it was worth anything.",
   },
   {
@@ -35,8 +35,8 @@ export const journey: Stop[] = [
   },
   {
     years: "2019 – 2021", kind: "study", title: "MSc Statistics & Machine Learning", org: "Linköping University", place: "Linköping, Sweden",
-    url: "https://liu.se", image: "/images/journey/liu-campus-valla.jpg", imageAlt: "Campus Valla at Linköping University",
-    credit: "Photo: Anna Nilsen (LiU), CC BY-SA 4.0, via Wikimedia Commons",
+    url: "https://liu.se", image: "/images/journey/liu-campus-valla-aerial.jpg", imageAlt: "Aerial view of Campus Valla at Linköping University",
+    credit: "Photo: Erik And30, CC BY-SA 4.0, via Wikimedia Commons",
     story: "A move to Sweden and a new language for the same curiosity: statistics, machine learning, and a thesis with Ericsson Research on anomaly detection and causal inference in 5G networks.",
   },
   {
