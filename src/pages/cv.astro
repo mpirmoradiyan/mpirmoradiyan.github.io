@@ -34,7 +34,6 @@ const skills = [
       </p>
       <p class="noprint actions">
         <a class="btn primary" href="/docs/Mohsen_Pirmoradiyan_CV.pdf" download>Download PDF</a>
-        <button class="btn" onclick="window.print()">Print</button>
       </p>
     </header>
 
@@ -97,7 +96,6 @@ const skills = [
   .skills dt { font-weight: 600; }
   .skills dd { margin: 0; color: var(--ink-soft); }
   .noprint { margin-top: 1rem; }
-  .noprint .btn { cursor: pointer; font: inherit; font-weight: 600; font-size: .9rem; }
   @media (max-width: 620px) { .entry, .skills { grid-template-columns: 1fr; gap: .2rem; } }
   .print-only { display: none; }
   .actions { display: flex; gap: .6rem; flex-wrap: wrap; }
