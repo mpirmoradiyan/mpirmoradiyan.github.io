@@ -2,7 +2,7 @@
 // Course lists are names only: no grades, transcripts or certificates are published.
 
 export type Fact = { label: string; value: string };
-export type Block = { heading: string; paragraphs?: string[]; bullets?: string[] };
+export type Block = { heading: string; paragraphs?: string[]; bullets?: string[]; photo?: Photo };
 export type CourseGroup = { title: string; note?: string; items: string[] };
 export type LinkItem = { label: string; href: string; note?: string };
 export type Photo = { src: string; alt: string };
@@ -14,8 +14,8 @@ export type StopDetail = {
   blocks: Block[];
   courses?: { title: string; intro?: string; groups: CourseGroup[] };
   links?: { title: string; items: LinkItem[] };
+  photosTop?: Photo[];
   photos?: Photo[];
-  closingPhoto?: Photo;
   story?: "acquisition";
 };
 
@@ -107,6 +107,7 @@ export const details: Record<string, StopDetail> = {
           "A survey is only worth something if the data is clean and every recording is where it's supposed to be. If a problem slips through, it shows up months later as a blurry or wrong image, and by then the crew is gone.",
           "So QC is checking, every day: is the source working properly, are the sensors all alive and wired the right way, are the positions right, is noise under control, and are the field procedures and safety rules followed. When something is wrong, you decide on the spot whether to fix it or record again.",
         ],
+        photo: { src: "/images/field/qc-review-in-recording-truck.jpg", alt: "Checking shots live on the recording monitors" },
       },
       {
         heading: "What I did",
@@ -169,12 +170,16 @@ export const details: Record<string, StopDetail> = {
         },
       ],
     },
+    photosTop: [
+      { src: "/images/field/crew-safety-briefing.jpg", alt: "A safety briefing for the field crew before work" },
+      { src: "/images/field/vibroseis-fleet-at-sunset.jpg", alt: "The vibroseis fleet at sunset" },
+      { src: "/images/field/folded-mountain-geology.jpg", alt: "Folded mountain geology, the target of the surveys" },
+    ],
     photos: [
       { src: "/images/field/field-survey-with-maps.jpg", alt: "Scouting a survey area with the line maps" },
-      { src: "/images/field/folded-mountain-geology.jpg", alt: "Folded mountain geology, the target of the surveys" },
+      { src: "/images/field/sercel-408-field-unit.jpg", alt: "A field acquisition unit" },
       { src: "/images/field/field-camp.jpg", alt: "The field camp" },
     ],
-    closingPhoto: { src: "/images/field/qc-station-in-recording-truck.jpg", alt: "At my QC desk in the recording truck" },
   },
 
   "msc-geophysics": {

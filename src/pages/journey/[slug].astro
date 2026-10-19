@@ -40,6 +40,16 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
     ))}
   </div>
 
+  {d.photosTop && (
+    <div class="container">
+      <div class="gallery top-gallery">
+        {d.photosTop.map((p) => (
+          <figure class="reveal"><img src={p.src} alt={p.alt} loading="lazy" /><figcaption>{p.alt}</figcaption></figure>
+        ))}
+      </div>
+    </div>
+  )}
+
   <div class="narrow body">
     {d.explainer && (
       <aside class="explainer reveal">
@@ -59,15 +69,9 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
         <h2>{b.heading}</h2>
         {b.paragraphs?.map((p) => <p>{p}</p>)}
         {b.bullets && <ul class="ticks">{b.bullets.map((x) => <li>{x}</li>)}</ul>}
+        {b.photo && <figure class="inline-photo"><img src={b.photo.src} alt={b.photo.alt} loading="lazy" /><figcaption>{b.photo.alt}</figcaption></figure>}
       </section>
     ))}
-
-    {d.closingPhoto && (
-      <figure class="closing reveal">
-        <img src={d.closingPhoto.src} alt={d.closingPhoto.alt} loading="lazy" />
-        <figcaption>{d.closingPhoto.alt}</figcaption>
-      </figure>
-    )}
 
     {d.links && (
       <section class="block reveal">
@@ -167,9 +171,10 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
   .ticks li { margin: .5em 0; }
   .ticks li::marker { color: var(--signal); }
 
-  .closing { margin: 1.6rem 0 0; max-width: 520px; }
-  .closing img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
-  .closing figcaption { font-size: .85rem; color: var(--muted); margin-top: .4rem; }
+  .inline-photo { margin: 1rem 0 0; max-width: 520px; }
+  .inline-photo img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+  .inline-photo figcaption { font-size: .85rem; color: var(--muted); margin-top: .4rem; }
+  .top-gallery { margin-top: 1.5rem; }
   .link-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .8rem; }
   .link-list li { padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: .3rem; }
   .link-list a, .link-title { font-weight: 600; text-decoration: none; line-height: 1.4; }

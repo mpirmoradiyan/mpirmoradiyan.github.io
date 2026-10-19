@@ -1,13 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
 import { highlights } from "../data/profile";
-const field = [
-  ["crew-safety-briefing", "A safety briefing for the field crew before work"],
-  ["recording-truck-in-the-field", "The recording truck in the field"],
-  ["recording-system-qc-monitors", "Quality-control monitors in the recording system"],
-  ["vibroseis-fleet-at-sunset", "The vibroseis fleet at sunset"],
-  ["sercel-408-field-unit", "A field acquisition unit"],
-];
 ---
 <Base title="Work" description="AI lead and computer-vision engineer for forest analytics; before that, fourteen years of seismic field operations.">
   <section class="container">
@@ -65,11 +58,7 @@ const field = [
         <li>Internal technical reports (2012–2016) on 3D survey-design scouting, receiver-array design, acquisition in an industrial and densely populated area, and peak-particle-velocity safety distances.</li>
       </ul>
     </details>
-    <div class="gallery">
-      {field.map(([f, alt]) => (
-        <figure class="reveal"><img src={`/images/field/${f}.jpg`} alt={alt} loading="lazy" /><figcaption>{alt}</figcaption></figure>
-      ))}
-    </div>
+    <p class="story-link"><a href="/journey/nisoc/">Read the full story, with photos from the field and how a seismic survey works →</a></p>
   </section>
 </Base>
 
@@ -82,6 +71,8 @@ const field = [
   .ticks { padding-left: 1.1em; }
   .ticks li { margin: .45em 0; }
   .small { font-size: .88rem; }
+  .story-link { margin-top: 1.2rem; font-weight: 600; }
+  .story-link a { text-decoration: none; }
   .nisoc { display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem; align-items: start; }
   .carry { padding: 1.2rem 1.4rem; }
   .carry h3 { margin-top: 0; }
@@ -91,9 +82,5 @@ const field = [
   .pubs summary { cursor: pointer; font-weight: 600; }
   .pubs ul { padding-left: 1.1em; margin: .6rem 0 0; }
   .pubs li { margin: .45em 0; font-size: .93rem; }
-  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .8rem; margin-top: 2rem; }
-  .gallery figure { margin: 0; border-radius: 12px; overflow: hidden; background: var(--bg-soft); border: 1px solid var(--line); }
-  .gallery img { aspect-ratio: 4 / 3; object-fit: cover; width: 100%; }
-  .gallery figcaption { font-size: .82rem; color: var(--muted); padding: .5rem .7rem; }
-  @media (max-width: 860px) { .role, .role.alt, .nisoc { grid-template-columns: 1fr; } .role.alt .role-media { order: -1; } .gallery { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 860px) { .role, .role.alt, .nisoc { grid-template-columns: 1fr; } .role.alt .role-media { order: -1; } }
 </style>
