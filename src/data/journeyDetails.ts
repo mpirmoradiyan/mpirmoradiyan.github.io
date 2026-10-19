@@ -15,6 +15,7 @@ export type StopDetail = {
   courses?: { title: string; intro?: string; groups: CourseGroup[] };
   links?: { title: string; items: LinkItem[] };
   photos?: Photo[];
+  story?: "acquisition";
 };
 
 export const details: Record<string, StopDetail> = {
@@ -81,6 +82,7 @@ export const details: Record<string, StopDetail> = {
   },
 
   nisoc: {
+    story: "acquisition",
     intro:
       "Fourteen years in the oil fields of south-west Iran, making sure seismic surveys recorded clean, trustworthy data. I started as a junior QC geophysicist and left as a senior supervisor, and most of my habits around data come from here.",
     facts: [

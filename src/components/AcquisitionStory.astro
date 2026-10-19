@@ -1,0 +1,303 @@
+---
+// Scroll-driven story of a land seismic survey: from the shot to the stacked section.
+// The earth scene and the traces are drawn here; the wiggle traces follow the reflection
+// travel-time t(x) = sqrt(t0^2 + (x / v)^2), so the curves are physically right.
+
+const steps = [
+  {
+    title: "The shot",
+    text: "Everything starts with a controlled pulse of energy. Vibroseis trucks press a heavy plate onto the ground and shake it with a sweep of frequencies for several seconds. In rough terrain we used small dynamite charges in shallow holes instead.",
+    photo: { src: "/images/field/vibroseis-trucks-on-line.jpg", alt: "Vibroseis trucks lined up on a seismic line" },
+  },
+  {
+    title: "Waves go down",
+    text: "The energy spreads into the ground as a wavefront, like ripples from a stone dropped in a pond, only in three dimensions. It speeds up or slows down in each rock layer it passes through.",
+  },
+  {
+    title: "Echoes come back",
+    text: "At every boundary between two kinds of rock, part of the energy bounces back up. The bigger the difference between the rocks, the stronger the echo. The rest keeps going down to deeper layers.",
+  },
+  {
+    title: "Geophones listen",
+    text: "Thousands of small sensors called geophones are planted in lines on the surface. They turn tiny movements of the ground into electrical signals. Every spot on the line becomes one recording, called a trace.",
+    photo: { src: "/images/field/geophone-array-layout.jpg", alt: "A geophone array laid out on the ground" },
+  },
+  {
+    title: "The recording truck",
+    text: "Cables carry every signal to the recording truck. This is where QC happens: we checked each shot live on the monitors, looking for dead channels, noise and wrong positions, before the crew moved on to the next shot.",
+    photo: { src: "/images/field/recording-system-qc-monitors.jpg", alt: "Quality-control monitors in the recording system" },
+  },
+  {
+    title: "A shot gather",
+    text: "Put all the traces from one shot side by side and you get a shot gather. Each echo shows up as a curve. Geophones far from the shot hear the echo later because the path is longer, so the curve bends down at the edges.",
+    photo: { src: "/images/field/shot-records-printout.jpg", alt: "Printed shot records, checked trace by trace" },
+  },
+  {
+    title: "Flatten and stack",
+    text: "Later, in processing, traces from many shots that look at the same point underground are grouped. Each curve is flattened, which is called normal moveout correction, and then the traces are added up. Random noise cancels out while the echoes add up. Repeat that along the line and you get the first picture of the layers underground.",
+  },
+];
+
+// ---- data view: synthetic traces ----
+const W = 800, top = 70, H = 370;
+const reflectors = [
+  { t0: 0.22, v: 1.6, a: 1.0 },
+  { t0: 0.43, v: 1.9, a: -0.75 },
+  { t0: 0.66, v: 2.3, a: 0.6 },
+];
+const nTr = 14;
+const xs = Array.from({ length: nTr }, (_, i) => i / (nTr - 1));
+const ricker = (u: number) => (1 - 2 * u * u) * Math.exp(-u * u);
+function tracePath(x0: number, arrivals: { t: number; a: number }[], gain = 15) {
+  const pts: string[] = [];
+  for (let k = 0; k <= 220; k++) {
+    const t = k / 220;
+    let dx = 0;
+    for (const r of arrivals) dx += r.a * ricker((t - r.t) / 0.014);
+    pts.push(`${(x0 + dx * gain).toFixed(1)},${(top + t * H).toFixed(1)}`);
+  }
+  return "M" + pts.join(" L");
+}
+const gx = (i: number) => 150 + i * 36;
+const gather = xs.map((x, i) =>
+  tracePath(gx(i), reflectors.map((r) => ({ t: Math.sqrt(r.t0 ** 2 + (x * 0.55 / r.v) ** 2), a: r.a }))),
+);
+const flat = xs.map((_, i) => tracePath(gx(i), reflectors.map((r) => ({ t: r.t0, a: r.a }))));
+const stacked = tracePath(720, reflectors.map((r) => ({ t: r.t0, a: r.a * 1.6 })), 18);
+const hyper = reflectors.map((r) =>
+  "M" + xs.map((x, i) => `${gx(i)},${(top + Math.sqrt(r.t0 ** 2 + (x * 0.55 / r.v) ** 2) * H).toFixed(1)}`).join(" L"),
+);
+
+// ---- earth view geometry ----
+const src = { x: 120, y: 150 };
+const geophones = Array.from({ length: 13 }, (_, i) => 190 + i * 40);
+const rays = [
+  { y: 262, rx: [270, 430, 590] },
+  { y: 352, rx: [350, 510, 670] },
+];
+const rayPath = (rx: number, y: number) => `M${src.x},${src.y} L${(src.x + rx) / 2},${y} L${rx},${src.y}`;
+---
+<section class="acq" aria-label="How a seismic survey works, step by step">
+  <div class="acq-head">
+    <p class="eyebrow">From a shot to a picture</p>
+    <h2>How a seismic survey works, step by step</h2>
+  </div>
+
+  <div class="acq-grid">
+    <div class="scene-wrap">
+      <figure class="scene card" data-step="1" aria-hidden="true">
+        <svg viewBox={`0 0 ${W} 480`} role="img">
+          <defs>
+            <clipPath id="below"><rect x="0" y={src.y} width={W} height="400" /></clipPath>
+          </defs>
+
+          <!-- Earth view -->
+          <g class="earth" data-from="1" data-to="5">
+            <rect class="sky" x="0" y="0" width={W} height={src.y} />
+            <path class="l1" d={`M0,${src.y} H${W} V268 C620,258 420,256 0,262 Z`} />
+            <path class="l2" d="M0,262 C420,256 620,258 800,268 V360 C600,346 380,350 0,352 Z" />
+            <path class="l3" d="M0,352 C380,350 600,346 800,360 V440 C560,432 300,436 0,438 Z" />
+            <path class="l4" d="M0,438 C300,436 560,432 800,440 V480 H0 Z" />
+            <line class="surface" x1="0" y1={src.y} x2={W} y2={src.y} />
+            <text class="lab" x="16" y="210">Layer 1</text>
+            <text class="lab" x="16" y="312">Layer 2</text>
+            <text class="lab" x="16" y="400">Layer 3</text>
+
+            <!-- source: vibroseis truck -->
+            <g class="truck" data-from="1" data-to="5">
+              <rect x="74" y="112" width="58" height="28" rx="4" />
+              <rect x="132" y="120" width="22" height="20" rx="3" />
+              <circle cx="88" cy="143" r="7" /><circle cx="140" cy="143" r="7" />
+              <rect class="plate" x="104" y="140" width="32" height="6" rx="2" />
+            </g>
+            <g class="shake" data-from="1" data-to="1">
+              <path d="M100,104 q6,-8 12,0 t12,0 t12,0" /><path d="M104,94 q6,-8 12,0 t12,0" />
+            </g>
+
+            <!-- wavefronts -->
+            <g class="waves" clip-path="url(#below)" data-from="2" data-to="3">
+              {[0, 1, 2, 3].map((k) => <circle class="ring" cx={src.x} cy={src.y} r="330" style={`animation-delay:${k * 0.9}s`} />)}
+            </g>
+
+            <!-- reflection rays -->
+            <g class="rays" data-from="3" data-to="5">
+              {rays.flatMap((r, j) => r.rx.map((rx, i) => <path class={`ray r${j}`} d={rayPath(rx, r.y)} style={`animation-delay:${(i + j * 3) * 0.25}s`} />))}
+            </g>
+
+            <!-- geophones and cable -->
+            <line class="cable" x1="190" y1={src.y - 4} x2="700" y2={src.y - 4} data-from="4" data-to="5" />
+            <g class="phones">
+              {geophones.map((x, i) => (
+                <g class="phone" style={`--d:${i * 0.08}s`}>
+                  <path d={`M${x - 6},${src.y - 10} h12 l-6,10 z`} />
+                  <path class="ping" d={`M${x - 8},${src.y - 18} q8,-8 16,0`} />
+                </g>
+              ))}
+            </g>
+
+            <!-- recording truck -->
+            <g class="recorder" data-from="4" data-to="5">
+              <rect x="706" y="104" width="78" height="36" rx="4" />
+              <circle cx="722" cy="143" r="7" /><circle cx="768" cy="143" r="7" />
+              <rect class="screen" x="716" y="112" width="30" height="18" rx="2" />
+              <path class="screen-line" d="M718,124 l5,-6 l5,8 l5,-10 l5,6 l4,-2" />
+            </g>
+          </g>
+
+          <!-- Data view -->
+          <g class="data" data-from="6" data-to="7">
+            <rect class="paper" x="0" y="0" width={W} height="480" />
+            <text class="axis" x="150" y="40">distance from the shot →</text>
+            <text class="axis" x="30" y="90" transform="rotate(90 30 90)">time ↓</text>
+            <g class="gather" data-from="6" data-to="6">
+              {hyper.map((d) => <path class="guide" d={d} />)}
+              {gather.map((d) => <path class="trace" d={d} />)}
+            </g>
+            <g class="nmo" data-from="7" data-to="7">
+              {flat.map((d) => <path class="trace" d={d} />)}
+              <path class="arrow" d="M640,250 h40" /><path class="arrow-head" d="M680,243 l10,7 l-10,7 z" />
+              <path class="trace stack" d={stacked} />
+              <text class="axis" x="784" y="40" text-anchor="end">stacked trace</text>
+            </g>
+          </g>
+        </svg>
+        <figcaption class="scene-cap"><span class="cap-num">1</span><span class="cap-title">{steps[0].title}</span></figcaption>
+      </figure>
+    </div>
+
+    <ol class="acq-steps">
+      {steps.map((s, i) => (
+        <li class="acq-step" data-step={i + 1} data-title={s.title}>
+          <span class="num">{i + 1}</span>
+          <h3>{s.title}</h3>
+          <p>{s.text}</p>
+          {s.photo && <img src={s.photo.src} alt={s.photo.alt} loading="lazy" />}
+        </li>
+      ))}
+    </ol>
+  </div>
+  <p class="acq-note muted">The cross-section and traces are a drawing, not real data. The photos are mine, from the field.</p>
+</section>
+
+<script>
+  function setup() {
+    document.querySelectorAll<HTMLElement>(".acq").forEach((root) => {
+      const scene = root.querySelector<HTMLElement>(".scene")!;
+      const num = root.querySelector(".cap-num")!;
+      const title = root.querySelector(".cap-title")!;
+      const layers = root.querySelectorAll<SVGElement>("[data-from]");
+      const apply = (n: number, t: string) => {
+        scene.dataset.step = String(n);
+        num.textContent = String(n);
+        title.textContent = t;
+        layers.forEach((el) => {
+          const on = n >= Number(el.dataset.from) && n <= Number(el.dataset.to);
+          el.classList.toggle("on", on);
+        });
+        root.querySelectorAll(".acq-step").forEach((s) => s.classList.toggle("active", Number((s as HTMLElement).dataset.step) === n));
+      };
+      const steps = [...root.querySelectorAll<HTMLElement>(".acq-step")];
+      let current = 0;
+      // The active step is the last one whose top has passed the middle of the screen.
+      const update = () => {
+        const mid = window.innerHeight * 0.55;
+        let active = steps[0];
+        for (const s of steps) if (s.getBoundingClientRect().top < mid) active = s;
+        const n = Number(active.dataset.step);
+        if (n !== current) { current = n; apply(n, active.dataset.title || ""); }
+      };
+      let queued = false;
+      window.addEventListener("scroll", () => {
+        if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; update(); }); }
+      }, { passive: true });
+      window.addEventListener("resize", update);
+      update();
+    });
+  }
+  setup();
+</script>
+
+<style>
+  .acq { padding: 2rem 0 1rem; }
+  .acq-head h2 { margin: 0 0 1.4rem; font-size: 1.6rem; }
+  .acq-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 2.5rem; align-items: start; }
+  .scene-wrap { position: sticky; top: 84px; }
+  .scene { margin: 0; overflow: hidden; }
+  .scene svg { display: block; width: 100%; height: auto; }
+  .scene-cap { display: flex; align-items: center; gap: .6rem; padding: .7rem 1rem; border-top: 1px solid var(--line); font-weight: 600; }
+  .cap-num { width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--signal); color: #fff; display: grid; place-items: center; font-family: var(--mono); font-size: .8rem; }
+
+  /* visibility by step */
+  [data-from] { opacity: 0; transition: opacity .6s ease; }
+  [data-from].on { opacity: 1; }
+
+  /* earth colours */
+  .sky { fill: var(--bg-soft); }
+  .l1 { fill: #c9a878; } .l2 { fill: #a9875c; } .l3 { fill: #8a6c48; } .l4 { fill: #6c5438; }
+  :global(:root[data-theme="dark"]) .l1 { fill: #6b5638; }
+  :global(:root[data-theme="dark"]) .l2 { fill: #5a4830; }
+  :global(:root[data-theme="dark"]) .l3 { fill: #4a3b28; }
+  :global(:root[data-theme="dark"]) .l4 { fill: #3a2e20; }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme="light"])) .l1 { fill: #6b5638; }
+    :global(:root:not([data-theme="light"])) .l2 { fill: #5a4830; }
+    :global(:root:not([data-theme="light"])) .l3 { fill: #4a3b28; }
+    :global(:root:not([data-theme="light"])) .l4 { fill: #3a2e20; }
+  }
+  .surface { stroke: var(--ink); stroke-width: 2; }
+  .lab { font-family: var(--mono); font-size: 13px; fill: rgba(255, 255, 255, .85); }
+  .truck rect, .truck circle, .recorder rect, .recorder circle { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+  .truck .plate { fill: var(--signal); stroke: none; }
+  .shake path { fill: none; stroke: var(--signal); stroke-width: 2.5; stroke-linecap: round; animation: shake .5s ease-in-out infinite alternate; }
+  @keyframes shake { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+  .ring { fill: none; stroke: var(--signal); stroke-width: 3; transform-origin: 120px 150px; animation: ripple 3.6s linear infinite; opacity: 0; }
+  @keyframes ripple { 0% { transform: scale(.04); opacity: .9; } 100% { transform: scale(1); opacity: 0; } }
+  .ray { fill: none; stroke: #fff; stroke-width: 2.2; stroke-dasharray: 6 6; }
+  .rays.on .ray { animation: travel 1.4s linear infinite; }
+  .ray.r1 { stroke: #ffe2a8; }
+  @keyframes travel { to { stroke-dashoffset: -24; } }
+  .cable { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 3 3; }
+  .phone path:first-child { fill: var(--ink); }
+  .ping { fill: none; stroke: var(--signal); stroke-width: 2; opacity: 0; }
+  .scene[data-step="4"] .phone path:first-child, .scene[data-step="5"] .phone path:first-child { fill: var(--signal); }
+  .scene[data-step="4"] .ping, .scene[data-step="3"] .ping { animation: ping 1.2s ease-out infinite; animation-delay: var(--d); }
+  @keyframes ping { 0% { opacity: 0; transform: translateY(4px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+  .recorder .screen { fill: var(--forest); stroke: none; }
+  .screen-line { fill: none; stroke: #9be3b8; stroke-width: 1.5; }
+  .scene[data-step="5"] .cable { stroke: var(--signal); animation: travel 1s linear infinite; }
+
+  /* data view */
+  .paper { fill: var(--surface); }
+  .axis { font-family: var(--mono); font-size: 13px; fill: var(--muted); }
+  .trace { fill: none; stroke: var(--ink); stroke-width: 1.3; }
+  .trace.stack { stroke: var(--signal); stroke-width: 2.4; }
+  .guide { fill: none; stroke: var(--signal); stroke-width: 6; opacity: .18; stroke-linecap: round; }
+  .arrow { stroke: var(--signal); stroke-width: 2.5; }
+  .arrow-head { fill: var(--signal); }
+
+  /* steps */
+  .acq-steps { list-style: none; padding: 0; margin: 0; }
+  .acq-step { position: relative; padding: 1.2rem 1.3rem 1.3rem 3.6rem; margin-bottom: 38vh; border-radius: var(--radius); border: 1px solid var(--line);
+    background: var(--surface); opacity: .55; transition: opacity .4s, border-color .4s, box-shadow .4s; }
+  .acq-step:last-child { margin-bottom: 8vh; }
+  .acq-step.active { opacity: 1; border-color: color-mix(in srgb, var(--signal) 50%, var(--line)); box-shadow: var(--shadow); }
+  .acq-step .num { position: absolute; left: 1.1rem; top: 1.25rem; width: 1.8rem; height: 1.8rem; border-radius: 50%; display: grid; place-items: center;
+    background: var(--bg-soft); color: var(--signal); font-family: var(--mono); font-weight: 600; font-size: .85rem; border: 1px solid var(--line); }
+  .acq-step.active .num { background: var(--signal); color: #fff; border-color: var(--signal); }
+  .acq-step h3 { margin: 0 0 .4rem; font-size: 1.15rem; }
+  .acq-step p { margin: 0; color: var(--ink-soft); }
+  .acq-step img { margin-top: .9rem; border-radius: 10px; border: 1px solid var(--line); aspect-ratio: 16 / 10; object-fit: cover; width: 100%; }
+  .acq-note { font-size: .85rem; margin-top: .5rem; }
+
+  @media (max-width: 860px) {
+    .acq-grid { grid-template-columns: 1fr; gap: 1rem; }
+    .scene-wrap { top: 64px; z-index: 5; }
+    .scene { box-shadow: var(--shadow); }
+    .scene-cap { padding: .45rem .8rem; font-size: .9rem; }
+    .acq-step { margin-bottom: 45vh; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ring, .shake path, .ray, .ping, .cable { animation: none !important; }
+    .ring { opacity: .5; }
+  }
+</style>

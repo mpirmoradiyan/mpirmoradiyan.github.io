@@ -2,6 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import { journey } from "../../data/journey";
 import { details } from "../../data/journeyDetails";
+import AcquisitionStory from "../../components/AcquisitionStory.astro";
 
 export function getStaticPaths() {
   return journey.filter((s) => s.slug && details[s.slug]).map((s) => ({ params: { slug: s.slug } }));
@@ -47,6 +48,11 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
         {d.explainer.paragraphs.map((p) => <p>{p}</p>)}
       </aside>
     )}
+  </div>
+
+  {d.story === "acquisition" && <div class="container"><AcquisitionStory /></div>}
+
+  <div class="narrow body">
 
     {d.blocks.map((b) => (
       <section class="block reveal">
