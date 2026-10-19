@@ -8,10 +8,10 @@ const byTopic = topics.map((t) => ({ ...t, notes: all.filter((n) => n.data.topic
 const years = [...new Set(all.map((n) => n.data.date.getUTCFullYear()))].sort((a, b) => b - a);
 const index = all.map((n) => ({ id: n.id, t: n.data.title, s: n.data.summary, g: n.data.tags.join(" "), p: n.data.topic }));
 ---
-<Base title="Lab Notes" description="Short, single-topic notes on computer vision, geospatial data, signal processing and machine learning, written from my own experiments.">
+<Base title="Lab Notes" description="My personal learning notes: short, one-idea notes on computer vision, geospatial data, signal processing, statistics and machine learning, written down while learning.">
   <section class="container head">
     <p class="eyebrow">Lab notes</p>
-    <h1>Things I learned by building them</h1>
+    <h1>Notes from my learning journey</h1>
     <p class="lead">Over the years I have tried ideas in notebooks while reading, watching lectures, doing university labs or solving problems at work. These are those experiments, rewritten as short articles: one idea per note, explained plainly, with code that runs and the sources I learned from.</p>
     <p class="muted">{all.length} notes · {byTopic.length} topics · {Math.min(...years)}–{Math.max(...years)} · dates show when I first explored each topic.</p>
 
