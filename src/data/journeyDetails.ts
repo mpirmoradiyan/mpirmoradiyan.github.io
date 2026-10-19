@@ -171,7 +171,7 @@ export const details: Record<string, StopDetail> = {
       ],
     },
     photosTop: [
-      { src: "/images/field/crew-safety-briefing.jpg", alt: "A safety briefing for the field crew before work" },
+      { src: "/images/field/field-visit-university-students.jpg", alt: "Explaining seismic acquisition to a group of university students in the field" },
       { src: "/images/field/vibroseis-fleet-at-sunset.jpg", alt: "The vibroseis fleet at sunset" },
       { src: "/images/field/folded-mountain-geology.jpg", alt: "Folded mountain geology, the target of the surveys" },
     ],
