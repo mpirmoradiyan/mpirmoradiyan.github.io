@@ -62,6 +62,13 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
       </section>
     ))}
 
+    {d.closingPhoto && (
+      <figure class="closing reveal">
+        <img src={d.closingPhoto.src} alt={d.closingPhoto.alt} loading="lazy" />
+        <figcaption>{d.closingPhoto.alt}</figcaption>
+      </figure>
+    )}
+
     {d.links && (
       <section class="block reveal">
         <h2>{d.links.title}</h2>
@@ -160,6 +167,9 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
   .ticks li { margin: .5em 0; }
   .ticks li::marker { color: var(--signal); }
 
+  .closing { margin: 1.6rem 0 0; max-width: 520px; }
+  .closing img { width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+  .closing figcaption { font-size: .85rem; color: var(--muted); margin-top: .4rem; }
   .link-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .8rem; }
   .link-list li { padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: .3rem; }
   .link-list a, .link-title { font-weight: 600; text-decoration: none; line-height: 1.4; }

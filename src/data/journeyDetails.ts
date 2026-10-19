@@ -15,6 +15,7 @@ export type StopDetail = {
   courses?: { title: string; intro?: string; groups: CourseGroup[] };
   links?: { title: string; items: LinkItem[] };
   photos?: Photo[];
+  closingPhoto?: Photo;
   story?: "acquisition";
 };
 
@@ -171,9 +172,9 @@ export const details: Record<string, StopDetail> = {
     photos: [
       { src: "/images/field/field-survey-with-maps.jpg", alt: "Scouting a survey area with the line maps" },
       { src: "/images/field/folded-mountain-geology.jpg", alt: "Folded mountain geology, the target of the surveys" },
-      { src: "/images/field/sercel-408-field-unit.jpg", alt: "A field acquisition unit that digitises the geophone signals" },
       { src: "/images/field/field-camp.jpg", alt: "The field camp" },
     ],
+    closingPhoto: { src: "/images/field/qc-station-in-recording-truck.jpg", alt: "At my QC desk in the recording truck" },
   },
 
   "msc-geophysics": {
