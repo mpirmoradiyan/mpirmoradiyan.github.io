@@ -1,6 +1,6 @@
 ---
-import Base from "../layouts/Base.astro";
-import { journey } from "../data/journey";
+import Base from "../../layouts/Base.astro";
+import { journey } from "../../data/journey";
 const kindLabel = { school: "School", study: "University", work: "Work" } as const;
 ---
 <Base title="Journey" description="The road from a high school in Isfahan to leading computer-vision work in Sweden.">
@@ -21,16 +21,17 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
             <path class="lane" d={side === "left" ? "M50,0 C50,30 72,35 72,50 C72,65 50,70 50,100" : "M50,0 C50,30 28,35 28,50 C28,65 50,70 50,100"} />
           </svg>
           <div class="pin reveal"><span>{s.years.split(" ")[0]}</span></div>
-          <article class="stop-card card reveal">
+          <article class={`stop-card card reveal${s.slug ? " has-page" : ""}`}>
             <div class="media">
               <img src={s.image} alt={s.imageAlt} loading="lazy" width="800" height="520" />
               <span class={`kind ${s.kind}`}>{kindLabel[s.kind]}</span>
             </div>
             <div class="body">
               <p class="years">{s.years}</p>
-              <h2>{s.title}</h2>
+              <h2>{s.slug ? <a class="stretch" href={`/journey/${s.slug}/`}>{s.title}</a> : s.title}</h2>
               <p class="org">{s.url ? <a href={s.url} target="_blank" rel="noopener">{s.org} ↗</a> : s.org}<span class="muted"> · {s.place}</span></p>
               <p class="story">{s.story}</p>
+              {s.slug && <p class="more" aria-hidden="true">Read the story <span>→</span></p>}
             </div>
           </article>
         </div>
@@ -77,6 +78,19 @@ const kindLabel = { school: "School", study: "University", work: "Work" } as con
   .org { font-weight: 500; margin-bottom: .6rem; font-size: .95rem; }
   .org a { text-decoration: none; }
   .story { color: var(--ink-soft); margin: 0; font-size: .97rem; }
+  .stop-card { position: relative; transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+  .stop-card.has-page:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--signal) 45%, var(--line)); }
+  .stop-card.has-page:hover .media img { transform: scale(1.03); }
+  .media { overflow: hidden; }
+  .media img { transition: transform .5s ease; }
+  .stretch { color: inherit; text-decoration: none; }
+  .stretch::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: var(--radius); }
+  .stretch:focus-visible { outline: none; }
+  .stop-card:has(.stretch:focus-visible) { outline: 2px solid var(--signal); outline-offset: 3px; }
+  .org a { position: relative; z-index: 2; }
+  .more { margin: .8rem 0 0; font-weight: 600; font-size: .9rem; color: var(--forest); }
+  .more span { display: inline-block; transition: transform .2s ease; }
+  .stop-card.has-page:hover .more span { transform: translateX(4px); }
   .start, .end { display: flex; justify-content: center; }
   .start span, .end span { font-family: var(--mono); font-size: .75rem; text-transform: uppercase; letter-spacing: .14em; padding: .4em .9em; border-radius: 999px;
     border: 1px solid var(--line); background: var(--surface); color: var(--muted); position: relative; z-index: 2; }
