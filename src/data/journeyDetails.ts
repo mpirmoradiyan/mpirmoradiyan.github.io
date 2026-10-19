@@ -171,11 +171,6 @@ export const details: Record<string, StopDetail> = {
         },
       ],
     },
-    photos: [
-      { src: "/images/field/field-survey-with-maps.jpg", alt: "Scouting a survey area with the line maps" },
-      { src: "/images/field/sercel-408-field-unit.jpg", alt: "A field acquisition unit" },
-      { src: "/images/field/field-camp.jpg", alt: "The field camp" },
-    ],
   },
 
   "msc-geophysics": {
