@@ -24,7 +24,7 @@ export const journey: Stop[] = [
   },
   {
     years: "2005 – 2019", kind: "work", title: "Seismic Data Acquisition QC Supervisor, junior to senior", slug: "nisoc", org: "National Iranian South Oil Company (NISOC)", place: "Khuzestan, Iran",
-    url: "https://www.nisoc.ir", image: "/images/journey/nisoc-field-collage.jpg", imageAlt: "Collage of my field photos: vibroseis trucks at sunset, recording-system QC monitors, a geophone array and surveying in sand dunes",
+    url: "https://www.nisoc.ir", image: "/images/journey/nisoc-cover-fleet-and-shot-gather.jpg", imageAlt: "Left: the vibroseis fleet at sunset. Right: printed shot records, turned so time runs down, each peak at a shot",
     story: "Fourteen years in the field: designing and quality-checking 2D and 3D land seismic surveys, where every recording had to be clean before it was worth anything.",
   },
   {

@@ -171,10 +171,6 @@ export const details: Record<string, StopDetail> = {
         },
       ],
     },
-    photosTop: [
-      { src: "/images/field/vibroseis-fleet-at-sunset.jpg", alt: "The vibroseis fleet at sunset" },
-      { src: "/images/field/shot-gather-printout.jpg", alt: "Printed shot records, turned so time runs down: each peak sits at a shot, and everything arrives later at geophones farther away" },
-    ],
     photos: [
       { src: "/images/field/field-survey-with-maps.jpg", alt: "Scouting a survey area with the line maps" },
       { src: "/images/field/sercel-408-field-unit.jpg", alt: "A field acquisition unit" },
