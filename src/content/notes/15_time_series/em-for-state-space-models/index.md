@@ -24,7 +24,9 @@ sources:
 status: draft
 ---
 
-A [structural time series model](/notes/structural-time-series-models/) has noise variances that decide how fast the trend and season can change and how noisy the observations are. Guess them badly and the [Kalman filter](/notes/kalman-filter/) gives poor predictions. The EM algorithm learns them from data, and for this model each update has a short closed form. In my course lab I learned the seasonal and observation noise variances on the sea-level data this way. I also got the objective wrong on paper, which is the main thing I want to fix here.
+Once I had a [structural time series model](/notes/structural-time-series-models/) for the sea-level data, there were still a few knobs nobody had told me how to set: the noise variances. They decide how fast the trend and season can change and how noisy the observations are. Guess them badly and the [Kalman filter](/notes/kalman-filter/) gives poor predictions. The lab's answer was the EM algorithm, which learns them from data, and for this model each update turns out to be a short closed form. I learned the seasonal and observation noise variances this way. I also wrote the objective down wrong in my report, and fixing that is the main point of this note.
+
+The same two-step idea shows up in my other EM notes, with different hidden things: which mixture component each point came from in [EM for Bernoulli mixtures](/notes/em-for-bernoulli-mixtures/), and the missing values themselves in [EM for missing data](/notes/em-algorithm-for-missing-data/).
 
 ## What EM is trying to maximize
 

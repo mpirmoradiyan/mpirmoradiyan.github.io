@@ -114,9 +114,10 @@ During training the one-step predictions follow the data closely with a narrow b
 - The Kalman gain balances state uncertainty against observation noise.
 - Missing observation: skip the correction. Forecasting: append missing values.
 - The innovations $v_t$ and their variances $F_t$ give the exact log-likelihood.
+- For offline analysis, the [Kalman smoother](/notes/kalman-smoother/) adds a backward pass that uses later data too.
 
 ## Resources
 
 - 732A80 Time Series and Sequence Learning, Linköping University (course lab 2, autumn 2020).
-- Durbin & Koopman, *Time Series Analysis by State Space Methods*, 2nd ed., Oxford University Press, 2012, Chapter 4 (filtering, missing observations, forecasting, likelihood).
+- Durbin & Koopman, *Time Series Analysis by State Space Methods*, 2nd ed., Oxford University Press, 2012, Chapter 4 (filtering, missing observations, forecasting) and Section 7.2 (likelihood).
 - Särkkä, *Bayesian Filtering and Smoothing*, Cambridge University Press, 2013, Chapter 4. https://users.aalto.fi/~ssarkka/pub/cup_book_online_20131111.pdf

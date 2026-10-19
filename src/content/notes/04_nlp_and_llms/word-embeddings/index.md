@@ -27,7 +27,7 @@ sources:
 status: draft
 ---
 
-Neural networks need numbers. The simplest way to turn a word into numbers is a one-hot vector: a vector as long as the vocabulary, all zeros except a single 1. The problem is that one-hot vectors are huge and say nothing about meaning. "Cat" is exactly as far from "dog" as it is from "carburettor". **Word embeddings** swap them for short, dense vectors (every number is used), learned so that words used in similar places end up close together. In these notes I build embeddings two ways, from counts and with word2vec, and then try pretrained vectors.
+Neural networks need numbers, so the first question is how to turn a word into numbers. The obvious answer is a one-hot vector: a vector as long as the vocabulary, all zeros except a single 1. It works, but there's a problem. One-hot vectors are huge and say nothing about meaning. "Cat" is exactly as far from "dog" as it is from "carburettor". **Word embeddings** swap them for short, dense vectors (every number is used), learned so that words used in similar places end up close together. In these notes I build embeddings two ways, from counts and with word2vec, and then try pretrained vectors.
 
 ## The idea: you know a word by its neighbours
 
@@ -68,7 +68,7 @@ k = 2
 emb = U[:, :k] * np.sqrt(S[:k])   # one k-dimensional vector per word
 ```
 
-This is the heart of latent semantic analysis. In practice, raw counts are swamped by common words like "the", so the matrix is usually reweighted first, for example with a logarithm or with positive pointwise mutual information (a score for how much more often two words appear together than chance would predict). GloVe is a newer take on this counting idea: it fits word vectors so that their dot products match the log of the co-occurrence counts.
+This is the heart of latent semantic analysis. In practice, raw counts are swamped by common words like "the", so the matrix is usually reweighted first, for example with a logarithm or with positive pointwise mutual information (a score for how much more often two words appear together than chance would predict). GloVe is a newer take on this counting idea: it fits word vectors so that their dot products (plus a bias per word) match the log of the co-occurrence counts.
 
 ## Method 2: word2vec, learning by prediction
 
@@ -83,7 +83,7 @@ $$
 P(c \mid w) = \frac{\exp(u_c \cdot v_w)}{\sum_{c'=1}^{|V|} \exp(u_{c'} \cdot v_w)},
 $$
 
-where $|V|$ is the vocabulary size. The problem is the bottom of the fraction: it goes over every word in the vocabulary for every single training pair. With a million words that's way too slow.
+where $|V|$ is the vocabulary size. Looks fine, until you notice the bottom of the fraction: it goes over every word in the vocabulary for every single training pair. With a million words that's way too slow.
 
 ### Negative sampling
 
@@ -114,7 +114,7 @@ I use `F.logsigmoid` instead of `torch.log(torch.sigmoid(x))` because it stays a
 
 **A mistake I made.** My first skip-gram and CBOW versions computed `sigmoid(u_c · v_w)` and trained it with binary cross-entropy against a target of 1, using only the real pairs. That has a lazy solution: make all vectors big and pointing the same way, so every dot product is huge and every answer is "yes". The loss drops to zero and the vectors mean nothing. It's the negative examples that force the model to tell real neighbours from random words. Without them (or a full softmax), there's nothing to learn.
 
-On a corpus of four sentences nothing meaningful comes out anyway, since word2vec needs millions of words. The toy runs are only useful for checking shapes and the loss, not for reading the vectors.
+On a toy corpus of a few sentences nothing meaningful comes out anyway, since word2vec needs millions of words. The toy runs are only useful for checking shapes and the loss, not for reading the vectors.
 
 ## Using pretrained vectors
 
@@ -133,7 +133,7 @@ This one tripped me up. The famous analogy "king - man + woman ≈ queen" is abo
 
 ## Beyond single words
 
-Plain word vectors give one vector per word, so "bank" (river) and "bank" (money) get the same vector. Contextual models like BERT and GPT give a different vector each time a word appears, depending on the sentence. Sentence-embedding models (for example `all-MiniLM-L6-v2` in the sentence-transformers library, which returns 384-dimensional vectors) go one step further and turn whole sentences into vectors, for search and clustering. What I like is that inside every LLM, the first layer is still an embedding table just like the one here.
+Plain word vectors give one vector per word, so "bank" (river) and "bank" (money) get the same vector. Contextual models like BERT and GPT give a different vector each time a word appears, depending on the sentence. Sentence-embedding models (for example `all-MiniLM-L6-v2` in the sentence-transformers library, which returns 384-dimensional vectors) go one step further and turn whole sentences into vectors, for search and clustering. What I like is that inside every LLM, the first layer is still an embedding table just like the one here. The difference is that it's trained together with the rest of the network, the same way the lookup table in the [MLP language model](/notes/mlp-language-model/) is.
 
 ## Key takeaways
 

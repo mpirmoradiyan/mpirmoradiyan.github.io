@@ -13,7 +13,7 @@ sources:
     author: "Christopher M. Bishop"
     url: "https://www.microsoft.com/en-us/research/publication/pattern-recognition-machine-learning/"
     type: book
-  - title: "The Elements of Statistical Learning, Sections 2.4 and 9.2.5"
+  - title: "The Elements of Statistical Learning, Sections 2.4 and 9.2.4"
     author: "Trevor Hastie, Robert Tibshirani, Jerome Friedman"
     url: "https://hastie.su.domains/ElemStatLearn/"
     type: book
@@ -22,26 +22,26 @@ sources:
 status: draft
 ---
 
-Most classifiers don't really output a class. They output a probability, and then *we* pick a rule that turns it into a decision. The default rule, "predict class 1 if $P(y=1 \mid x) > 0.5$", quietly assumes both kinds of mistake cost the same. In spam filtering or credit scoring they clearly don't, and that's where the threshold, or a loss matrix, comes in.
+For a long time I thought a classifier outputs a class. It doesn't, really. Most classifiers output a probability, and then *we* pick a rule that turns it into a decision. The default rule, "predict class 1 if $P(y=1 \mid x) > 0.5$", quietly assumes both kinds of mistake cost the same. In spam filtering or credit scoring they clearly don't, and that's where the threshold, or a loss matrix, comes in.
 
 ## Two labs, same idea
 
-In two of my first lab assignments I ran into this from two directions.
+In two of my first lab assignments I ran into this from two directions, and at the time I didn't see they were the same thing.
 
 - With a logistic regression spam filter, I moved the threshold from 0.5 to 0.8. Overall accuracy got worse, but the number of real emails wrongly sent to spam dropped a lot (on the test half, from 143 to 20). Losing a real email is worse than seeing one more spam, so that trade can be the right one.
 - With a Naive Bayes credit-scoring model, I used a loss matrix that said "calling a bad customer good costs 10 times more than calling a good customer bad". Again the overall error went up, but the expensive mistake became much rarer.
 
-These are the same idea. A loss matrix is just a principled way to pick the threshold.
+Later it clicked: these are the same idea. A loss matrix is just a careful way to pick the threshold.
 
 ## The Bayes decision rule
 
-Write the costs in a matrix $L$, where $L_{jk}$ is the loss when the true class is $j$ and we predict $k$. Correct decisions usually cost 0. For a new input $x$ the model gives probabilities $P(j \mid x)$. The expected loss of predicting class $k$ is
+So how do you get from costs to a decision? Write the costs in a matrix $L$, where $L_{jk}$ is the loss when the true class is $j$ and we predict $k$. Correct decisions usually cost 0. For a new input $x$ the model gives probabilities $P(j \mid x)$. The expected loss of predicting class $k$ is
 
 $$
 R(k \mid x) = \sum_j L_{jk} \, P(j \mid x),
 $$
 
-and the best decision is the class with the smallest expected loss. Nothing more.
+and the best decision is the class with the smallest expected loss. That's the whole rule.
 
 For two classes, call them positive and negative, let $c_{FP}$ be the cost of a false positive and $c_{FN}$ the cost of a false negative. Predicting positive costs $c_{FP}\,(1-p)$ on average and predicting negative costs $c_{FN}\,p$, where $p = P(\text{positive} \mid x)$. So we predict positive when
 
@@ -98,5 +98,5 @@ A small trap I hit while building ROC curves by hand: first decide which class i
 
 - 732A99 Machine Learning, Linköping University (course labs, autumn 2019)
 - Christopher M. Bishop, *Pattern Recognition and Machine Learning*, Section 1.5 (decision theory and the loss matrix)
-- Trevor Hastie, Robert Tibshirani, Jerome Friedman, *The Elements of Statistical Learning*, 2nd ed., Section 2.4 (statistical decision theory) and Section 9.2.5 (loss matrices for trees): https://hastie.su.domains/ElemStatLearn/
+- Trevor Hastie, Robert Tibshirani, Jerome Friedman, *The Elements of Statistical Learning*, 2nd ed., Section 2.4 (statistical decision theory) and Section 9.2.4 (the loss matrix for trees): https://hastie.su.domains/ElemStatLearn/
 - Tom Fawcett, "An introduction to ROC analysis", *Pattern Recognition Letters* 27 (2006): https://doi.org/10.1016/j.patrec.2005.10.010

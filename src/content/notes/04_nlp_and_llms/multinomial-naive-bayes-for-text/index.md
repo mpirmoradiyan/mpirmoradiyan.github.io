@@ -26,11 +26,11 @@ sources:
 status: draft
 ---
 
-Naive Bayes is the classic first model for text: fast, no tuning to speak of, and often a hard baseline to beat. In the text classification lab we used it to guess a speaker's party from speeches in the Swedish Riksdag, with the 2017/18 session for training and 2018/19 for testing. The model was easy. Tuning it properly and reading the scores was where I slipped.
+Naive Bayes is the classic first model for text: fast, almost nothing to tune, and often a hard baseline to beat. In the text classification lab we used it to guess a speaker's party from speeches in the Swedish Riksdag, with the 2017/18 session for training and 2018/19 for testing. The model itself was the easy part. Tuning it properly and reading the scores is where I slipped.
 
 ## The model
 
-Treat a document as a bag of words: keep the counts, forget the order. For a class $c$ (a party) and a document with word counts $x_1, \dots, x_V$ over a vocabulary of $V$ words, Multinomial Naive Bayes picks
+Start by throwing away the word order. Treat a document as a bag of words: keep the counts, forget the order. (For sentiment this costs a lot, since "not good, bad" and "good, not bad" become the same input. More on that in the [bag-of-words vs. LSTM sentiment note](/notes/bag-of-words-vs-lstm-for-sentiment/).) For a class $c$ (a party) and a document with word counts $x_1, \dots, x_V$ over a vocabulary of $V$ words, Multinomial Naive Bayes picks
 
 $$
 \hat c = \arg\max_c \Big[\log P(c) + \sum_{w=1}^{V} x_w \log P(w \mid c)\Big]
@@ -50,7 +50,7 @@ $$
 P(w \mid c) = \frac{N_{cw} + \alpha}{N_c + \alpha V}
 $$
 
-$N_{cw}$ is how often $w$ appears in class $c$'s training documents, $N_c$ is the total word count for class $c$, and $\alpha$ is the smoothing constant. Without $\alpha$, a word never seen with a class gets probability 0, its log is $-\infty$, and one unseen word vetoes the class. $\alpha = 1$ is Laplace smoothing. Smaller values like $0.1$ (Lidstone) trust the counts more. In our grid search, $\alpha = 0.1$ won.
+$N_{cw}$ is how often $w$ appears in class $c$'s training documents, $N_c$ is the total word count for class $c$, and $\alpha$ is the smoothing constant. Without $\alpha$, a word never seen with a class gets probability 0, its log is $-\infty$, and one unseen word vetoes the class. $\alpha = 1$ is Laplace smoothing; other values of $\alpha$ are called Lidstone smoothing. Smaller values like $0.1$ trust the counts more. In our grid search, $\alpha = 0.1$ won.
 
 ## Bag-of-words vs. set-of-words
 
@@ -75,7 +75,7 @@ search = GridSearchCV(pipe, grid, cv=5, scoring="f1_macro")
 # search.fit(train_texts, train_labels); search.best_params_
 ```
 
-Multinomial NB is defined for counts, but it also runs on tf-idf values in practice, so my version wasn't broken, just a different question.
+Multinomial NB is defined for counts, but it also runs on tf-idf values in practice, so my version wasn't broken, just a different question. (How tf-idf weights words is in the [tf-idf search and keywords note](/notes/tf-idf-search-and-keywords/).)
 
 ## Reading the scores: don't compare a CV score with a test score
 

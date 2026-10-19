@@ -23,11 +23,11 @@ sources:
 status: draft
 ---
 
-A bigram model only looks at one character. And you can't just make the count table bigger for longer contexts, because the number of rows explodes. The fix, from Bengio and colleagues in 2003, is to give every token a small learned vector (an **embedding**), glue together the vectors of the last few tokens, and let a neural network turn them into probabilities for the next token. Here I build that model for characters, along with the training habits that come with it.
+My [bigram model](/notes/bigram-language-model/) only looks at one character, and its made-up names showed it. The obvious fix is more context. But you can't just make the count table bigger, because the number of rows explodes. Bengio and colleagues had a neat way around this back in 2003. Give every token a small learned vector (an **embedding**). Glue together the vectors of the last few tokens. Let a neural network turn that into probabilities for the next token. Here I build that model for characters, plus the training habits that came with it.
 
 ## The dataset: a sliding window of context
 
-Pick a context length, `block_size = 3`. For every position in every name, the input is the three characters before it and the target is the next one. Names are padded on the left with the special token `.` (index 0).
+First, how do the training examples look now? Pick a context length, `block_size = 3`. For every position in every name, the input is the three characters before it and the target is the next one. At the start of a name there's nothing before it, so we pad on the left with the special token `.` (index 0).
 
 ```python
 block_size = 3
@@ -78,13 +78,13 @@ def forward(X):
     return h @ W2 + b2                           # (B, 27) logits
 ```
 
-`emb.view(-1, 6)` flattens the last two dimensions without copying anything. This was new to me: a PyTorch tensor is really a flat block of memory plus a shape and **strides**, which say how far to jump in memory along each dimension. `view` only changes that description, which is why it's so cheap. Gluing `emb[:, 0]`, `emb[:, 1]` and `emb[:, 2]` together with `torch.cat` gives the same result, but it uses new memory and hard-codes the context length.
+`emb.view(-1, 6)` flattens the last two dimensions without copying anything. This was new to me. A PyTorch tensor is really a flat block of memory plus a shape and **strides**, which say how far to jump in memory along each dimension. `view` only changes that description, so it's almost free. Gluing `emb[:, 0]`, `emb[:, 1]` and `emb[:, 2]` with `torch.cat` gives the same result, but it uses new memory and hard-codes the context length.
 
-Use `F.cross_entropy(logits, Y)` instead of writing softmax and log by hand. Same value, less memory, and it's numerically safe: it subtracts the biggest logit before taking the exponential, so large logits don't overflow to `inf`.
+For the loss, use `F.cross_entropy(logits, Y)` instead of writing softmax and log by hand. Same value, less memory, and it's numerically safe: it subtracts the biggest logit before taking the exponential, so large logits don't overflow to `inf`.
 
 ## Minibatches
 
-Running the whole dataset through the model every step is slow, and you don't need the exact gradient anyway. Picking 32 random rows per step gives a noisy but good-enough gradient, and you can take many more steps in the same time.
+Pushing all 228,146 examples through the model at every step is slow. And you don't need the exact gradient anyway. Picking 32 random rows per step gives a noisy but good-enough gradient, and you can take many more steps in the same time.
 
 ```python
 for step in range(15000):
@@ -100,7 +100,7 @@ for step in range(15000):
 
 ## Finding a learning rate
 
-A quick trick for picking the learning rate: over 1,000 steps, grow it exponentially from $10^{-3}$ to $10^{0}$ and write down the loss at each step. Then plot the loss against the exponent.
+Then the usual question: what learning rate? Here's a quick trick. Over 1,000 steps, grow the rate exponentially from $10^{-3}$ to $10^{0}$ and write down the loss at each step. Then plot the loss against the exponent.
 
 ![Loss plotted against the base-10 exponent of the learning rate during a 1,000-step sweep. The loss drops from about 20 at 10^-3, is lowest around 10^-1, and rises again near 10^0.](fig-learning-rate-sweep.png)
 
@@ -108,13 +108,14 @@ The loss drops fastest and is lowest around $10^{-1}$, then gets unstable as the
 
 ## Train, dev and test splits
 
-A big model can just memorize its training set. Then a low training loss tells you nothing about how it does on new names. The usual fix is to shuffle the words and split them:
+A big model can just memorize its training set. Then a low training loss tells you nothing about how it does on names it has never seen. The fix is to shuffle the words and split them:
 
 - **train (80%)** to fit the parameters,
 - **dev or validation (10%)** to choose settings like embedding size, hidden size and learning rate,
 - **test (10%)** to report a final number, and only use it rarely.
 
 ```python
+import random
 random.seed(42)
 random.shuffle(words)
 n1, n2 = int(0.8 * len(words)), int(0.9 * len(words))
@@ -123,7 +124,9 @@ Xdev, Ydev = build_dataset(words[n1:n2]) # 22,655
 Xte, Yte = build_dataset(words[n2:])     # 22,866
 ```
 
-If the train and dev losses are about the same, the model is **underfitting**: it's too small, or something else is holding it back. If the train loss is clearly lower than the dev loss, it's **overfitting**. With 2-dimensional embeddings and 500 hidden units, my train and dev losses stayed close and the test loss was about **2.52**. That's no better than the bigram model (about 2.45), so the model was underfitting. It took me a moment to see why: the 2-dimensional embedding table was the bottleneck. 3 characters x 2 numbers is very little information for the hidden layer to work with. In the follow-up notebook, 10-dimensional embeddings with 200 hidden units and a better initialization brought the dev and test losses down to about **2.25**.
+How do you read the two losses? If the train loss is clearly lower than the dev loss, the model is **overfitting**. If they're about the same but both still high, it's **underfitting**: it's too small, or something else is holding it back.
+
+With 2-dimensional embeddings and 500 hidden units, my train and dev losses stayed close and the test loss was about **2.52**. That's no better than the bigram model (about 2.45). So, underfitting. It took me a moment to see why. The 2-dimensional embedding table was the bottleneck: 3 characters x 2 numbers is very little information for the hidden layer to work with. In the follow-up notebook, 10-dimensional embeddings with 200 hidden units and a better initialization brought the dev and test losses down to about **2.25**. That initialization story is in [Getting initialization right](/notes/activations-at-initialization/).
 
 ## What the embeddings learn
 
@@ -131,7 +134,7 @@ With $d = 2$ you can plot the embedding table directly.
 
 ![Scatter plot of the learned two-dimensional character embeddings. The vowels a, e, i, o and u sit together, the special token "." is far to one side, and rare letters such as q are separated from the main cluster.](fig-char-embeddings-2d.png)
 
-This is my favourite part. Nobody told the network that vowels are similar, but they end up close together anyway, because they show up in similar places and can stand in for each other when predicting. The start/end token sits off on its own. That's the whole point of embeddings: tokens that behave alike get similar vectors, so what the model learns about one carries over to the others.
+This is my favourite part. Nobody told the network that vowels are similar. They end up close together anyway, because they show up in similar places and can stand in for each other when predicting. The start/end token sits off on its own. And that's the whole point of embeddings: tokens that behave alike get similar vectors, so what the model learns about one carries over to the others.
 
 ## Sampling
 

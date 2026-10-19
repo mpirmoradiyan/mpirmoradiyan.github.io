@@ -133,7 +133,7 @@ def ransac_homography(src, dst, thresh=3.0, iters=2000, rng=np.random.default_rn
     return dlt(src[best], dst[best]), best                   # refit on all inliers
 ```
 
-Here `dlt` is the four-point homography solver from the geometric transformations note, and `project` applies $\mathbf{H}$ and divides by the third coordinate. How many iterations do you need? If a fraction $w$ of the matches are inliers, a random sample of $s$ matches is all inliers with probability $w^s$. To get at least one clean sample with probability $p$, you need
+Here `dlt` is the `homography_dlt` solver from the geometric transformations note (exact for 4 pairs, least squares for more), and `project` applies $\mathbf{H}$ and divides by the third coordinate. How many iterations do you need? If a fraction $w$ of the matches are inliers, a random sample of $s$ matches is all inliers with probability $w^s$. To get at least one clean sample with probability $p$, you need
 
 $$
 N = \frac{\log(1 - p)}{\log(1 - w^s)}.

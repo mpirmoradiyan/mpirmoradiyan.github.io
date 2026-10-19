@@ -105,6 +105,8 @@ Two practical details in there. Products of many probabilities underflow, so it'
 
 With the true $K = 3$, EM recovered the three true $\mu$ profiles quite well. With $K = 4$, one of the components (the one with all $\mu_{kd} = 0.5$) got split into two. That flat component is hard to pin down: its bit probabilities are exactly the average of the other two components' (they're mirror images around 0.5), so on average it looks like a 50/50 blend of them. Only the correlations between bits tell them apart, and EM converges slowly while it sorts that out. EM also only finds a local optimum, so it's worth running it from several random starts and keeping the best $\ell$.
 
+The same E-step / M-step pattern shows up elsewhere with a different hidden quantity: missing values in [EM for missing data](/notes/em-algorithm-for-missing-data/), and a hidden state sequence in [EM for state-space models](/notes/em-for-state-space-models/). If you'd rather sample the hidden labels than average over them, that's [Gibbs sampling for mixtures](/notes/gibbs-sampling-and-normal-mixtures/).
+
 ## Key takeaways
 
 - EM alternates soft assignments (E-step) and weighted refits (M-step); for Bernoulli mixtures, $\mu_k$ is a responsibility-weighted mean.

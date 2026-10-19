@@ -47,7 +47,7 @@ The way I keep the three variants apart is by asking what each one keeps fixed:
 
 ## SPP-net: a fixed-length vector from any image size
 
-Early CNNs needed a fixed input size, like 224×224. The reason is the fully connected layers at the end: they expect a vector of a fixed length. SPP-net got rid of that limit. It splits the last feature map into a fixed grid of bins, $1\times1$, $2\times2$ and $4\times4$, no matter how big the map is, and max-pools each bin. With $c$ channels you always get $c(1 + 4 + 16) = 21c$ numbers.
+Early CNNs needed a fixed input size, like 224×224. The reason is the fully connected layers at the end: they expect a vector of a fixed length. SPP-net got rid of that limit. It splits the last feature map into fixed grids of bins, for example $1\times1$, $2\times2$ and $4\times4$ as in the paper's figure, no matter how big the map is, and max-pools each bin. With $c$ channels you always get $c(1 + 4 + 16) = 21c$ numbers.
 
 ```python
 import torch
@@ -91,7 +91,7 @@ print(tuple(PyramidPooling(512)(torch.randn(1, 512, 64, 64)).shape))   # (1, 102
 
 After this module, every pixel carries four extra summaries: one of the whole image ($1\times1$), one of its half or quarter ($2\times2$), and finer ones of smaller sub-regions ($3\times3$, $6\times6$). Keeping the original map in the concat really matters. Without it, small objects that get washed out in the coarse bins would just be lost.
 
-The same module helps with counting dense objects. In the multi-sigma counting paper I studied, a PPM sits after a VGG feature extractor, so each location "knows" whether it's in a dense or a sparse part of the image. That paper used max pooling for the global $1\times1$ level. The difference is simple once you see it: max pooling keeps the strongest response, so it tells you whether something is there at all. Average pooling keeps the mean, so it tells you how much of it there is. PSPNet found average pooling a bit better for scene parsing.
+The same module helps with counting dense objects. In the multi-sigma counting paper I studied, a PPM sits after a VGG feature extractor, so each location "knows" whether it's in a dense or a sparse part of the image. My version of that model used max pooling for the global $1\times1$ level. The difference is simple once you see it: max pooling keeps the strongest response, so it tells you whether something is there at all. Average pooling keeps the mean, so it tells you how much of it there is. PSPNet found average pooling a bit better for scene parsing.
 
 ## YOLO's SPP: fixed windows, stride 1
 

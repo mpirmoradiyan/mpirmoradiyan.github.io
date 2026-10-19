@@ -30,7 +30,7 @@ status: draft
 
 Some images only use a thin slice of the grey levels they could use. A snowy landscape is the classic example: most pixels sit between 210 and 240, so faint ski tracks and the texture of the snow are almost invisible, and a model looking at the image doesn't get much to work with. Contrast enhancement remaps pixel values so the useful differences get more of the range. Each method below is just a different answer to "what should the mapping look like?". I compared them in 2022 and 2023 while looking at overexposed and snowy images.
 
-All of them are **point operations**: a pixel's new value depends only on its old value (and, for CLAHE, on the histogram of its neighbourhood). So for 8-bit images you can write each one as a lookup table (LUT) with 256 entries, which is why they're so fast.
+Most of them are **point operations**: a pixel's new value depends only on its old value. So for 8-bit images you can write each one as a lookup table (LUT) with 256 entries, which is why they're so fast. CLAHE is the exception: it uses one LUT per tile and blends them, so the output also depends on where the pixel is.
 
 ## A fake snowy test image
 
@@ -92,7 +92,7 @@ $$
 \text{out} = \text{in}^{\gamma}.
 $$
 
-With $\gamma < 1$ the curve sits above the diagonal, so dark values get lifted and shadows open up. With $\gamma > 1$ it sits below: the image gets darker, and the curve is steeper near the top, so **bright values get spread apart**. That makes $\gamma > 1$ the right direction for snow and overexposed images. With $\gamma = 2$, the snow moved down from a mean of 224 to 197 and its spread grew from 8.5 to 13.5, while the image still looked natural.
+With $\gamma < 1$ the curve sits above the diagonal, so dark values get lifted and shadows open up. With $\gamma > 1$ it sits below: the image gets darker, and the curve is steeper near the top, so **bright values get spread apart**. That makes $\gamma > 1$ the right direction for snow and overexposed images. With $\gamma = 2$, the snow moved down from a mean of 224 to 197 and its spread grew (the slope of $x^2$ at $224/255$ is about 1.76), while the image still looked natural.
 
 This tripped me up: libraries don't agree on the convention.
 
@@ -128,7 +128,7 @@ In the colour version of the test scene, equalising each RGB channel separately 
 
 ## A side note on sharpening
 
-Sharpening often gets used alongside these methods, but it's a linear filter, not a remapping of grey levels. The classic kernels add a scaled Laplacian to the identity, for example
+Sharpening often gets used alongside these methods, but it's a linear filter, not a remapping of grey levels. The classic kernels subtract the Laplacian from the identity (an unchanged image), for example
 
 $$
 \begin{bmatrix} 0 & -1 & 0 \\ -1 & 5 & -1 \\ 0 & -1 & 0 \end{bmatrix}.
@@ -146,7 +146,7 @@ A sharpening kernel should **sum to 1**, so flat regions keep their brightness. 
 
 ## Key takeaways
 
-- Contrast enhancement is just a remapping of grey levels, usually done with a 256-entry lookup table.
+- Contrast enhancement is a remapping of grey levels, usually done with a 256-entry lookup table (one per tile for CLAHE).
 - Histogram equalisation pushes each value through the image's CDF. It's strong, global and boosts noise.
 - CLAHE equalises tiles, clips each histogram to cap the gain, and blends neighbouring tiles smoothly. It's the best all-round choice.
 - Gamma $>1$ in the $\text{in}^{\gamma}$ convention spreads out the highlights, which helps with snow and overexposure. Check which convention your library uses.

@@ -19,7 +19,7 @@ sources:
 status: draft
 ---
 
-The MLP language model glues all the context characters together and pushes them through one hidden layer in a single step. With a longer context that feels wasteful: eight characters of information get squashed together right away. WaveNet, a 2016 model for raw audio, mixes inputs bit by bit in a tree instead: neighbours first, then pairs of pairs, and so on. Here I build that idea for character-level names, and clean up the code into small PyTorch-like modules along the way.
+My [MLP language model](/notes/mlp-language-model/) glues all the context characters together and pushes them through one hidden layer in a single step. That's fine for 3 characters. With a longer context it feels wasteful: eight characters of information get squashed together all at once. WaveNet, a 2016 model for raw audio, does it differently. It mixes inputs bit by bit, in a tree: neighbours first, then pairs of pairs, and so on. Here I build that idea for character-level names, and tidy the code into small PyTorch-like modules along the way.
 
 ## From a flat MLP to a tree
 
@@ -29,7 +29,7 @@ With a context of 8 characters and 10-dimensional embeddings, the flat model doe
 (B, 8, 10) --flatten--> (B, 80) --Linear--> (B, 200) --> ... --> (B, 27)
 ```
 
-The hierarchical model instead merges two neighbours at a time:
+The tree-shaped (hierarchical) model merges two neighbours at a time instead:
 
 ```
 (B, 8, 10) -> (B, 4, 20) -> Linear -> (B, 4, 68)    # pairs of characters
@@ -38,9 +38,11 @@ The hierarchical model instead merges two neighbours at a time:
            -> Linear -> (B, 27)
 ```
 
-The way I picture it: each level looks at a slightly bigger piece of the context and makes a better summary of it. So the last layer gets a summary of all eight characters that was built up step by step, not in one jump.
+The way I picture it: each level looks at a slightly bigger piece of the context and writes a better summary of it. So the last layer gets a summary of all eight characters that was built up step by step, not in one jump.
 
 ## Two tensor tricks that make it easy
+
+How much reshaping code does this need? Not much, thanks to two tricks.
 
 **Matrix multiplication only touches the last dimension.** A linear layer works on the last dimension and just repeats itself over all the ones in front:
 
@@ -50,7 +52,7 @@ The way I picture it: each level looks at a slightly bigger piece of the context
 
 So a `Linear` layer on a (B, 4, 20) tensor handles the 4 pairs in parallel, with the same weights for every pair.
 
-**`view` can group neighbours.** For a (B, 8, 10) tensor stored in one block of memory, `x.view(B, 4, 20)` puts characters 0 and 1 side by side, then 2 and 3, and so on. I didn't believe this at first, so I checked it: it's exactly the same as concatenating the even and odd positions:
+**`view` can group neighbours.** For a (B, 8, 10) tensor stored in one block of memory, `x.view(B, 4, 20)` puts characters 0 and 1 side by side, then 2 and 3, and so on. I didn't believe this at first, so I checked it. It's exactly the same as concatenating the even and odd positions:
 
 ```python
 e = torch.randn(4, 8, 10)
@@ -93,7 +95,7 @@ model = Sequential([
 ])
 ```
 
-The linear layers before batch norm have no bias. Batch norm subtracts the mean anyway and has its own learned shift, so a bias there would do nothing. The hidden width of 68 is picked so the model has about 22,400 parameters, roughly the same as the flat model with 200 hidden units (about 22,100). That way the comparison is fair.
+The linear layers before batch norm have no bias. Batch norm subtracts the mean anyway and has its own learned shift, so a bias there would do nothing. Why 68 hidden units? It gives the model about 22,400 parameters, roughly the same as the flat 8-character model with 200 hidden units (about 22,100). That way the comparison is fair.
 
 ## The batch-norm bug that 3D inputs cause
 
@@ -107,7 +109,7 @@ xmean = x.mean(dim, keepdim=True)    # (1, 1, 68)
 xvar = x.var(dim, keepdim=True)
 ```
 
-That's what `torch.nn.BatchNorm1d` does for 3D input too, except PyTorch expects the channel dimension in the middle, (B, C, L), not last. Bugs like this that don't throw any error are a good reason to print the output shape of every layer once:
+That's what `torch.nn.BatchNorm1d` does for 3D input too, except PyTorch expects the channel dimension in the middle, (B, C, L), not last. Bugs like this, which don't throw any error, are a good reason to print the output shape of every layer once:
 
 ```python
 for layer in model.layers:
@@ -128,7 +130,7 @@ That's clearly better than the 3-character MLP from the earlier notes, whose val
 
 The per-batch loss is very noisy, so averaging it over windows of 1,000 steps makes the curve readable. The step down at 150,000 is where the learning rate drops.
 
-The samples now look like real names: `lyncia`, `audlyn`, `kimber`, `erisha`, `ella`, `roni`.
+And the samples finally look like real names: `lyncia`, `audlyn`, `kimber`, `erisha`, `ella`, `roni`.
 
 ## How this compares to the real WaveNet
 

@@ -40,7 +40,7 @@ Before matching anything, predictions and ground truth have to use the same box 
 | `cxcywh` | centre $x$, centre $y$, width, height | many detector heads |
 | YOLO | `cxcywh` divided by image width and height, so in $[0, 1]$ | YOLO label files |
 
-A box at corners $(385, 60, 600, 357)$ is $(385, 60, 215, 297)$ in COCO format and has centre $(492.5, 208.5)$. If you mix formats by accident, you get IoUs near zero and an mAP near zero, and it looks like the model is broken when really the evaluation is. So I just convert everything to corners before scoring.
+A box at corners $(385, 60, 600, 357)$ is $(385, 60, 215, 297)$ in COCO format and has centre $(492.5, 208.5)$. If you mix formats by accident, you get IoUs near zero and an mAP near zero, and it looks like the model is broken when really the evaluation is. So I just convert everything to corners before scoring. (The [bounding-box formats note](/notes/bounding-box-formats/) has the converters and the usual bugs.)
 
 ## Step 1: is a detection correct?
 

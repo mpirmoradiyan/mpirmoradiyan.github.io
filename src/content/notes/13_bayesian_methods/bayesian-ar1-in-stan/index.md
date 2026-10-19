@@ -65,7 +65,7 @@ for (phi in c(0.3, 0.95)) {
 # phi = 0.95  sd of sample mean: simulated 1.87, formula 2.00
 ```
 
-That explains a standard deviation of about 2 for $\mu$. An interval of $\pm 80$ needs one more ingredient: the model behind those numbers didn't constrain $\phi$ to $(-1, 1)$, and its posterior for $\phi$ reached past 1 (upper limit 1.007). Near and beyond $\phi = 1$ the term $(1-\phi)\mu$ that ties the series to its mean vanishes, so the likelihood becomes flat in $\mu$ and the posterior of $\mu$ is left to the prior, which was vague. Stan also reported divergent transitions in this region, its way of saying the posterior geometry is awkward. Declaring `real<lower=-1, upper=1> phi;` (as in my own Stan file) removed most of them.
+That explains a standard deviation of about 2 for $\mu$. An interval of $\pm 80$ needs one more ingredient: the model behind those numbers didn't constrain $\phi$ to $(-1, 1)$, and its posterior for $\phi$ reached past 1 (upper limit 1.007). Near and beyond $\phi = 1$ the term $(1-\phi)\mu$ that ties the series to its mean vanishes, so the likelihood becomes flat in $\mu$ and the posterior of $\mu$ is left to the prior, which was vague. Stan also reported divergent transitions in this region, its way of saying the posterior geometry is awkward. Declaring `real<lower=-1, upper=1> phi;` (as in my own Stan file) keeps the sampler out of that region.
 
 The lesson I took: a wide posterior isn't a sampler failure. It's the data honestly saying they contain little information about that parameter.
 

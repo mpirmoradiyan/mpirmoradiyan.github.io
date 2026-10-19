@@ -112,7 +112,7 @@ In my draft I suggested non-zero prior means for the extra terms, and our report
 
 ## Resources
 
-- Andrew Gelman et al., *Bayesian Data Analysis*, 3rd ed., Section 14.2 (Bayesian analysis of classical regression) and Section 14.8 (informative prior distributions): http://www.stat.columbia.edu/~gelman/book/
+- Andrew Gelman et al., *Bayesian Data Analysis*, 3rd ed., Section 14.2 (Bayesian analysis of classical regression) and Section 14.8 (including numerical prior information): http://www.stat.columbia.edu/~gelman/book/
 - Kevin P. Murphy, *Machine Learning: A Probabilistic Perspective*, Section 7.6 (Bayesian linear regression)
 - Jonah Gabry et al., "Visualization in Bayesian workflow", *JRSS A* 182(2) (2019), on prior predictive checks: https://doi.org/10.1111/rssa.12378
 - 732A91 Bayesian Learning, Linköping University (course lab, spring 2020).

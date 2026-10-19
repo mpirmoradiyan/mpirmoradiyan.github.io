@@ -51,7 +51,7 @@ The `+=` is important, and it's an easy bug to miss. If a value is used in more 
 
 ## Doing it by hand for one neuron
 
-Take the neuron from the previous note: $n = x_1w_1 + x_2w_2 + b$ and $o = \tanh(n)$, with $x_1=2$, $x_2=0$, $w_1=-3$, $w_2=1$ and $b \approx 6.8814$. Then $n \approx 0.8814$ and $o \approx 0.7071$.
+Take the neuron from the [computational graphs note](/notes/computational-graphs/): $n = x_1w_1 + x_2w_2 + b$ and $o = \tanh(n)$, with $x_1=2$, $x_2=0$, $w_1=-3$, $w_2=1$ and $b \approx 6.8814$. Then $n \approx 0.8814$ and $o \approx 0.7071$.
 
 1. $\bar o = 1$.
 2. $\bar n = 1 - o^2 = 1 - 0.5 = 0.5$.

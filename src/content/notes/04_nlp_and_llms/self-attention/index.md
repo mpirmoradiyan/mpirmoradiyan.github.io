@@ -23,11 +23,11 @@ sources:
 status: draft
 ---
 
-What a word means depends on the words around it. "Bank" means one thing next to "river" and another next to "loan". Self-attention is how each token gets to look at every other token in the sequence and grab the information it needs. It's the heart of the transformer. It replaced recurrence because it connects any two positions in one step, and it runs in parallel. Here I build it up from the simplest version to the one GPT uses.
+Start with the problem. What a word means depends on the words around it. "Bank" means one thing next to "river" and another next to "loan". So a token's vector can't just sit there on its own. It needs a way to look at the other tokens and pull in what it needs. Self-attention is that way, and it's the heart of the transformer. It took over from RNNs because it links any two positions in one step, and it runs in parallel. I'll build it up the way it made sense to me: from the dumbest version to the one GPT uses.
 
 ## Step 0: plain averaging already shares information
 
-Say each of $T$ tokens has an embedding vector $x_i$. The roughest way for token $i$ to learn about its context is to replace $x_i$ with the average of all the embeddings. That does mix information, but every token gets the exact same blend. Attention keeps the idea of a weighted average but makes the weights **depend on the data**. So basically each token decides for itself how much to take from every other token.
+Say each of $T$ tokens has an embedding vector $x_i$. The roughest way for token $i$ to learn about its context is to swap $x_i$ for the average of all the embeddings. That does mix information. But every token ends up with the exact same blend, which is useless. Attention keeps the idea of a weighted average but makes the weights **depend on the data**. So basically each token decides for itself how much to take from every other token.
 
 ## Step 1: weights from dot products
 
@@ -54,7 +54,7 @@ weights = torch.softmax(scores, dim=-1) # each row sums to 1
 context = weights @ x                   # (6, 3)
 ```
 
-There's nothing to train yet. A token can only pay attention to tokens that already look like it, which is way too limited.
+This works, but there's nothing to train yet. A token can only pay attention to tokens that already look like it. That's way too limited.
 
 ## Step 2: give each token three roles (query, key, value)
 
@@ -107,7 +107,7 @@ print((q @ k.transpose(-2, -1)).var())            # about 16
 print((q @ k.transpose(-2, -1) * 16**-0.5).var()) # about 1
 ```
 
-Big scores push the softmax towards a one-hot vector: one token gets nearly all the weight, and the gradients for all the others become tiny. Dividing by $\sqrt{d_k}$ brings the variance back to about 1, so the softmax starts out spread out and training behaves, especially at the start.
+Why should we care? Big scores push the softmax towards a one-hot vector. One token grabs nearly all the weight, and the gradients for all the others become tiny. Dividing by $\sqrt{d_k}$ brings the variance back to about 1. Then the softmax starts out spread out, and training behaves, especially early on.
 
 You can see it on one row of scores. For the scores $[4, 16, 12]$ with $d_k = 3$, the plain softmax gives $[0.000, 0.982, 0.018]$, almost a hard pick. Dividing by $\sqrt{3} \approx 1.73$ first gives $[0.001, 0.909, 0.090]$, still clear but softer. With real head sizes like 64, the difference is much bigger.
 

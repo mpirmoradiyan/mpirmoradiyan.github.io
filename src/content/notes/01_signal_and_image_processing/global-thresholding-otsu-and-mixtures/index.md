@@ -89,7 +89,7 @@ Here it settles at 114, almost the same as Otsu. That's not a coincidence: at a 
 
 ## A Gaussian mixture: a threshold based on probability
 
-Otsu and Ridler–Calvard quietly treat both classes as equally likely. A **two-component Gaussian mixture** models the histogram as
+Otsu and Ridler–Calvard end up near the midpoint between the two class means. That's the best place to cut only when the two classes are equally common and equally spread. A **two-component Gaussian mixture** models the histogram as
 
 $$
 p(v) = \pi_0\,\mathcal{N}(v;\,\mu_0, \sigma_0^2) + \pi_1\,\mathcal{N}(v;\,\mu_1, \sigma_1^2),

@@ -25,7 +25,7 @@ sources:
 status: draft
 ---
 
-Gibbs sampling is MCMC for when the joint posterior is messy but each parameter, *given all the others*, has a simple distribution you can sample directly. You cycle through the parameters, drawing each one from its conditional, and the sequence of full vectors is a Markov chain with the joint posterior as its target. In the fourth computational statistics lab we used it to smooth a noisy series of measurements over 50 days. The derivation was right; the code had a bug that's worth remembering.
+In the fourth computational statistics lab we had 50 days of noisy measurements and wanted a smooth curve through them, with uncertainty. The joint posterior over all 50 levels looked messy. But each level on its own, *given all the others*, turned out to be a plain normal you can sample directly. That's the setting for Gibbs sampling: cycle through the parameters, drawing each one from its conditional, and the sequence of full vectors is a Markov chain with the joint posterior as its target. Our derivation was right. Our code had a bug that I want to remember.
 
 ## The model
 
@@ -104,12 +104,18 @@ x <- 1:50
 y <- 0.3 + 1.2 * (1 - exp(-x / 15)) + rnorm(50, sd = 0.3)   # a noisy curve
 draws <- gibbs_rw(y, s2 = 0.2)
 post_mean <- colMeans(draws[-(1:100), ])          # drop a short burn-in
+
+D <- diff(diag(50))                               # first-difference matrix
+exact <- solve(diag(50) + crossprod(D), y)        # exact posterior mean
+max(abs(post_mean - exact))                       # about 0.03: just Monte Carlo noise
 ```
+
+The exact mean comes from writing the posterior as one multivariate normal: its precision matrix is $(I + D^\top D)/\sigma^2$, where $D$ takes differences of neighbours, so its mean is $(I + D^\top D)^{-1}\vec Y$.
 
 ## Things to watch
 
 - **Correlated components mix slowly.** Neighbouring $\mu$'s are strongly tied, so one-at-a-time updates take small steps. Block updates (drawing all $\vec\mu$ jointly from its multivariate normal) mix much faster for models like this.
-- **Burn-in and thinning.** Drop early iterations if the start was far from the posterior; look at trace plots and autocorrelation of a few components.
+- **Burn-in.** Drop early iterations if the start was far from the posterior; look at trace plots and autocorrelation of a few components.
 - **Gibbs is a special case of Metropolis-Hastings** where every proposal is accepted, because proposing from the exact conditional makes the acceptance ratio equal to 1. See [Metropolis-Hastings](/notes/metropolis-hastings-and-gelman-rubin/).
 
 For Gibbs sampling with hidden labels (data augmentation) in a mixture model, see [Gibbs sampling and normal mixtures](/notes/gibbs-sampling-and-normal-mixtures/).

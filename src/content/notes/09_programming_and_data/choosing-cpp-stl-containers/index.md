@@ -20,9 +20,11 @@ sources:
 status: draft
 ---
 
-The C++ standard library has about a dozen containers, and most of them can hold the same data. What's different is how much each operation costs and how the elements sit in memory. I'm still learning C++, and while working through a book on the STL I found that picking a container mostly comes down to two questions: *which operations will I do most?* and *do I need the elements to stay in order?* These notes put the answers in one place, including a few things I got wrong in my first notes and had to fix.
+When I started working through a book on the C++ STL, the first thing that confused me was the choice. There are about a dozen containers, and most of them can hold the same data. So why so many? The answer turned out to be simple. They differ in how much each operation costs and in how the elements sit in memory. Picking one mostly comes down to two questions: *which operations will I do most?* and *do I need the elements to stay in order?* I'm still learning C++, so these are learning notes. I put the answers in one place here, including a few things I got wrong in my first notes and had to fix.
 
 ## The cost table
+
+I made this table first, so I could look things up quickly.
 
 | Container | Structure | Access by index | Find by value / key | Insert / erase at end | Insert / erase at front | Insert / erase in the middle | Ordered? |
 |---|---|---|---|---|---|---|---|
@@ -35,11 +37,11 @@ The C++ standard library has about a dozen containers, and most of them can hold
 
 The adapters `stack`, `queue` and `priority_queue` are thin wrappers around one of the sequence containers. `stack` and `queue` give $O(1)$ push and pop at the ends they allow. `priority_queue` is a binary heap stored in a `vector`: $O(1)$ to read the top, $O(\log n)$ to push or pop.
 
-The thing that took me a while to get: Big-O hides the constant factor, and for containers that constant is mostly about **memory layout**. A `vector` keeps its elements side by side, so the CPU loads them a cache line at a time and fetches the next ones early. A `list` or a `map` puts every element in its own node somewhere on the heap and follows pointers to reach it. Each hop can be a cache miss, which costs way more than the comparison or addition you actually wanted. That's why a plain linear scan over a `vector` often beats a "faster" structure for small and medium sizes.
+But the table isn't the whole story, and this took me a while to get. Big-O hides the constant factor. For containers, that constant is mostly about **memory layout**. Picture it like this. A `vector` keeps its elements side by side, so the CPU loads them a cache line at a time and fetches the next ones early. A `list` or a `map` puts every element in its own node somewhere on the heap, and the program follows pointers to reach it. Each hop can be a cache miss. A cache miss costs way more than the comparison or addition you actually wanted. That's why a plain linear scan over a `vector` often beats a "faster" structure for small and medium sizes.
 
 ## Sequence containers
 
-**`std::vector`** is the default. Access by index is $O(1)$. `push_back` is $O(1)$ amortised, meaning cheap on average: when it runs out of room, the vector grabs a bigger block (usually 1.5× or 2× bigger), moves every element over, and frees the old one. Two habits make it faster:
+**`std::vector`** is the default. Access by index is $O(1)$. `push_back` is $O(1)$ amortised. That just means cheap on average. When it runs out of room, the vector grabs a bigger block (usually 1.5× or 2× bigger), moves every element over, and frees the old one. Two habits make it faster:
 
 ```cpp
 std::vector<Employee> staff;
@@ -73,7 +75,7 @@ Each node carries two pointers, so a `list<int>` uses several times the memory o
 
 These keep their keys sorted in a balanced binary search tree, usually a red–black tree, so search, insert and delete are all $O(\log n)$. Pick them when order matters: walking through keys in order, range queries with `lower_bound` / `upper_bound`, or finding the nearest key. The `multi` versions allow repeated keys, and `equal_range` gives you all entries for one key.
 
-The most common bug here is `operator[]` on a map. If the key is missing, it **inserts** a default value, so a simple lookup quietly grows the map. It also can't be used on a `const` map.
+The bug I'd watch for here is `operator[]` on a map. If the key is missing, it **inserts** a default value, so a simple lookup quietly grows the map. It also can't be used on a `const` map.
 
 ```cpp
 std::map<std::string, int> counts;

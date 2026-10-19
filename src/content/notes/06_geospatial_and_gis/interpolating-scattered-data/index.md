@@ -72,7 +72,7 @@ where the $\lambda_k$ are the **barycentric coordinates**. The way I think about
 
 ## Cubic: Clough–Tocher
 
-The `cubic` option in SciPy's `griddata` uses the **Clough–Tocher** scheme on the same triangles. Each triangle gets split into three smaller ones, and a cubic polynomial is fitted on each so that both the values *and* the first derivatives match across edges. The slopes at the samples are estimated from the data. The result is smooth ($C^1$, so the slope is continuous too) and it was the most accurate method in my test. The catch: unlike linear, it can overshoot. Near a sharp peak it can give values higher than the highest sample.
+The `cubic` option in SciPy's `griddata` uses the **Clough–Tocher** scheme on the same triangles. Each triangle gets split into three smaller ones, and a cubic polynomial is fitted on each so that both the values *and* the first derivatives match across edges. The slopes at the samples are estimated from the data. The result is smooth ($C^1$, so the slope is continuous too), and in my test it was about as accurate as the thin-plate RBF, the best of the bunch. The catch: unlike linear, it can overshoot. Near a sharp peak it can give values higher than the highest sample.
 
 ## Outside the data: NaN
 
@@ -100,7 +100,7 @@ RBFs fill the whole grid, including outside the hull, where they fall back to th
 
 ### Smoothing for noisy data
 
-If the samples are noisy, exact interpolation is a bad idea, because the surface is forced through every noisy value. The `smoothing` parameter $\lambda$ loosens this: the system becomes $(\Phi + \lambda I)\mathbf{w} = \mathbf{z}$, where $\Phi$ is the matrix of kernel values between samples and $I$ is the identity. Bigger $\lambda$ means a less exact fit and a smoother surface. It's the same trade-off as in ridge regression.
+If the samples are noisy, exact interpolation is a bad idea, because the surface is forced through every noisy value. The `smoothing` parameter $\lambda$ loosens this: the system becomes $(\Phi + \lambda I)\mathbf{w} = \mathbf{z}$ (plus the extra rows for the polynomial), where $\Phi$ is the matrix of kernel values between samples and $I$ is the identity. Bigger $\lambda$ means a less exact fit and a smoother surface. It's the same trade-off as in ridge regression.
 
 ![A noisy one-dimensional sine wave with three RBF fits: smoothing 0 wiggles through every point, smoothing 0.03 follows the true sine closely, smoothing 1 is too flat.](fig-rbf-smoothing.png)
 

@@ -121,6 +121,8 @@ This prints `0.0 -0.2 True`. One detail that tripped me up: the `np.sign(f)` fac
 - A constant phase shift $\theta$ keeps the wavelet in place but changes its shape. $180°$ flips the polarity.
 - Neither kind of phase shift changes the amplitude spectrum.
 
+The next step, minimum vs. maximum phase and why bandwidth sets resolution, is in [Minimum, maximum and mixed phase wavelets](/notes/minimum-phase-wavelets-and-bandwidth/).
+
 ## Resources
 
 - Öz Yilmaz, *Seismic Data Processing*, SEG Investigations in Geophysics No. 2, 1987, Chapter 1 (the sinusoid-to-wavelet, linear phase shift and constant phase shift examples that inspired the figures here). The 2001 edition, *Seismic Data Analysis*, is free on the SEG Wiki: <https://wiki.seg.org/wiki/Seismic_Data_Analysis>.

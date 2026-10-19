@@ -17,7 +17,7 @@ sources:
 status: draft
 ---
 
-An observation can be unusual in two ways: it has an extreme value in some variable, or it has an odd *combination* of values that are each normal on their own. A tall person who weighs 50 kg isn't extreme in height or in weight, but the pair is rare. Euclidean distance from the mean only catches the first kind. Mahalanobis distance catches both. We used these distances in two group assignments on national athletics records (seven running events, 55 countries), and the mistakes we made along the way are worth writing down.
+An observation can be unusual in two ways: it has an extreme value in some variable, or it has an odd *combination* of values that are each normal on their own. A tall person who weighs 50 kg isn't extreme in height or in weight, but the pair is rare. Euclidean distance from the mean only catches the first kind. Mahalanobis distance catches both. We used these distances in two group assignments on national athletics records (seven running events, 54 countries), and the mistakes we made along the way are worth writing down.
 
 ## Three distances from the mean
 
@@ -69,14 +69,14 @@ pchisq(d_mah[n], df = p, lower.tail = FALSE) < 0.001 / n   # TRUE: still an outl
 
 ## Turning distance into a test
 
-If the data are multivariate normal, $d_M^2$ for an observation follows (approximately, for large $n$) a chi-square distribution with **$p$ degrees of freedom**, where $p$ is the number of variables. So a p-value is `pchisq(d2, df = p, lower.tail = FALSE)`. For small samples there's an exact result based on the Beta distribution, but the chi-square version is the usual first check.
+If the data are multivariate normal, $d_M^2$ for an observation follows (approximately, for large $n$) a chi-square distribution with **$p$ degrees of freedom**, where $p$ is the number of variables. So a p-value is `pchisq(d2, df = p, lower.tail = FALSE)`. For small samples there's an exact result based on the Beta distribution, but the chi-square version is the usual first check. (The same distance, measured from a hypothesised mean instead of from each point, gives [Hotelling's T² test](/notes/hotelling-t2-simultaneous-intervals/).)
 
 Two corrections to what we did in the second assignment:
 
 - **Degrees of freedom.** We used $p - 1 = 6$. It should be $p = 7$. Each of the seven variables contributes one squared standardized deviation. Nothing is lost here the way one degree of freedom is lost when estimating a variance. Using 6 makes the distances look more extreme than they are.
-- **What to correct for.** We applied Bonferroni by dividing $\alpha$ by 7, the number of races. But the tests are run once per **country**, not per race: each country's $d_M^2$ is one test that already combines all seven races. With 55 countries, the Bonferroni level is $\alpha/55$. (For many tests, [Benjamini–Hochberg](/notes/benjamini-hochberg-fdr/) is a less strict alternative.) (We also called the 0.001 a "confidence interval"; it's a significance level.)
+- **What to correct for.** We applied Bonferroni by dividing $\alpha$ by 7, the number of races. But the tests are run once per **country**, not per race: each country's $d_M^2$ is one test that already combines all seven races. With 54 countries, the Bonferroni level is $\alpha/54$. (For many tests, [Benjamini–Hochberg](/notes/benjamini-hochberg-fdr/) is a less strict alternative.) (We also called the 0.001 a "confidence interval"; it's a significance level.)
 
-And one interpretation point: being flagged doesn't mean an observation is an error. In athletics data, the countries that stand out are often small nations with few athletes, which is a real feature of the data, not something to delete.
+And one interpretation point: being flagged doesn't mean an observation is an error. A country with an unusual mix of records is a real part of the data, so look at why it stands out before thinking about deleting it.
 
 ## Key takeaways
 

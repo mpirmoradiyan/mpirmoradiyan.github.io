@@ -27,19 +27,19 @@ sources:
 status: draft
 ---
 
-The MLP language model from the previous note does train, but its first loss is around 34 when it should be about 3.3, and lots of its hidden units barely learn. Both problems come from how the weights start out. In a two-layer network you can get away with it, but in a deep one it breaks training. Here I track down both problems with a few histograms and fix them with simple scaling rules.
+My [MLP language model](/notes/mlp-language-model/) did train. But two things about it bugged me. Its very first loss was around 34, when it should be about 3.3. And lots of its hidden units barely learned anything. Both problems turned out to come from how the weights start out. A two-layer network forgives you for that. A deep one doesn't. So here I track both problems down with a few histograms and fix them with simple scaling rules.
 
 ## Know the loss you should expect at step 0
 
-Before training, the network has no reason to like any of the 27 characters more than the others. So the most honest thing it can do is give them all the same probability, which gives a loss of
+Start with a simple question: what loss should an untrained network have? Before training, it has no reason to prefer any of the 27 characters. So the most honest thing it can do is give them all the same probability. That gives a loss of
 
 $$
 -\log\frac{1}{27} = \log 27 \approx 3.30 .
 $$
 
-My first run started at a loss of about 34. So the network wasn't unsure. It was **confidently wrong**. Some logits (the raw scores before softmax) were big, so softmax put almost all the probability on a few characters, and the right character usually got almost nothing.
+My first run started at about 34. So the network wasn't unsure. It was **confidently wrong**. Some logits (the raw scores before softmax) were big, so softmax put almost all the probability on a few characters, and the right character usually got almost nothing.
 
-A tiny example with 8 classes made it click for me. If all logits are 0, every class gets probability 1/8 and the loss for any target is $\log 8 \approx 2.08$. If one wrong logit is 5, that class grabs 95% of the probability and every other class gets 0.6%, so the loss on a typical target jumps to about 5. With logits like 10 or 9, the loss for most targets goes above 10.
+A tiny example with 8 classes made it click for me. If all logits are 0, every class gets probability 1/8, and the loss for any target is $\log 8 \approx 2.08$. Now make one wrong logit 5. That class grabs 95% of the probability, every other class gets 0.6%, and the loss on a typical target jumps to about 5. With logits like 10 or 9, the loss for most targets goes above 10.
 
 The logits are `h @ W2 + b2`. To start close to uniform, just make them small: set `b2` to zero and scale `W2` down.
 
@@ -48,7 +48,7 @@ W2 = torch.randn((n_hidden, vocab_size), generator=g) * 0.01
 b2 = torch.zeros(vocab_size)
 ```
 
-With that change the first loss became **3.28**, right where it should be. The loss curve also lost its "hockey stick" shape. The network no longer wastes its first thousand steps just shrinking the logits, so the training time goes into learning actual patterns. In my 10,000-step runs, the final training-split loss went from 2.81 to 2.44.
+With that change the first loss became **3.28**, right where it should be. The loss curve also lost its "hockey stick" shape. Before, the network spent its first thousand steps just shrinking the logits. Now that time goes into learning actual patterns. In my 10,000-step runs, the final training-split loss went from 2.81 to 2.44.
 
 One catch: don't set `W2` exactly to zero. With zero weights, every hidden unit gets the same gradient, so they all stay identical forever. A small random scale keeps them different from each other.
 
@@ -60,9 +60,9 @@ $$
 \frac{d}{dx}\tanh(x) = 1 - \tanh^2(x).
 $$
 
-When $|\tanh(x)|$ is close to 1, this derivative is close to 0. In backprop, the gradient coming into the unit gets multiplied by this local derivative. So a **saturated** unit (one stuck near -1 or +1) passes almost no gradient back to its weights or to the layers below. If a unit is saturated for every example in a batch, it doesn't learn at all. It's a **dead neuron**.
+So when $|\tanh(x)|$ is close to 1, the derivative is close to 0. Why does that matter? In backprop, the gradient coming into the unit gets multiplied by this local derivative. A **saturated** unit (one stuck near -1 or +1) passes almost no gradient back to its weights or to the layers below. If a unit is saturated for every example in a batch, it doesn't learn at all. It's a **dead neuron**.
 
-The pre-activations (the values going into tanh) were the problem. Their standard deviation was about 5, so most of them landed far out in the flat tails of tanh.
+The culprit was the pre-activations (the values going into tanh). Their standard deviation was about 5, so most of them landed far out in the flat tails of tanh.
 
 ![Three histograms for the hidden layer at initialization. The pre-activations spread from about -15 to 15. The tanh outputs pile up at -1 and +1. The local derivative 1 - h squared is mostly near 0.](fig-tanh-saturated.png)
 
@@ -70,11 +70,11 @@ Scaling `W1` by 0.2 and `b1` by 0.01 shrinks the pre-activations into the range 
 
 ![The same three histograms after scaling W1 and b1 down. Pre-activations sit between about -2 and 2, tanh outputs are spread smoothly across -1 to 1, and most derivatives are close to 1.](fig-tanh-healthy.png)
 
-Now almost every unit passes a healthy gradient back. In this shallow network the effect on the final loss was small and noisy across my short runs. A two-layer net forgives a lot. In a ten-layer net the same mistake piles up layer after layer.
+Now almost every unit passes a healthy gradient back. In this shallow network the effect on the final loss was small and noisy across my short runs. But in a ten-layer net the same mistake piles up, layer after layer.
 
 ## A proper rule instead of magic numbers
 
-Guessing 0.2 doesn't work when you have many layers of different sizes. So it's worth looking at what a linear layer does to the variance. If $x$ has $n$ independent inputs with variance 1 and the weights also have variance 1, then each output $y = \sum_{i=1}^{n} x_i w_i$ is a sum of $n$ terms with variance 1, so
+Guessing 0.2 stops working when you have many layers of different sizes. So I looked at what a linear layer does to the variance. Say $x$ has $n$ independent inputs with variance 1, and the weights also have variance 1. Then each output $y = \sum_{i=1}^{n} x_i w_i$ is a sum of $n$ terms with variance 1, so
 
 $$
 \operatorname{Var}(y) = n \quad\Rightarrow\quad \operatorname{std}(y) = \sqrt{n}.
@@ -102,11 +102,11 @@ W1 = torch.randn((n_embd * block_size, n_hidden), generator=g) \
      * (5/3) / (n_embd * block_size) ** 0.5
 ```
 
-PyTorch has the same rule built in as `torch.nn.init.kaiming_normal_(w, nonlinearity="tanh")`.
+PyTorch has the same rule built in as `torch.nn.init.kaiming_normal_`. One trap: it assumes the `nn.Linear` layout, (out, in), and reads the fan-in from the second dimension. Our `W1` is stored the other way round, (in, out). So here you need `kaiming_normal_(W1, mode="fan_out", nonlinearity="tanh")`. With the default mode it would divide by $\sqrt{200}$ instead of $\sqrt{30}$.
 
 ## Checking a deeper network
 
-To see if the rule actually holds up, I stacked five `Linear` + `Tanh` layers of width 100. Every linear weight started as `randn / sqrt(fan_in) * 5/3`, and the last layer was scaled by 0.1. Then I tracked four things.
+Does the rule actually hold up in a deeper network? To find out, I stacked five `Linear` + `Tanh` layers of width 100. Every linear weight started as `randn / sqrt(fan_in) * 5/3`, and the last layer was scaled by 0.1. Then I tracked four things.
 
 1. **Activation histograms per layer.** The tanh outputs had a standard deviation of about 0.7 in every layer, and 8-9% of units were saturated ($|h| > 0.97$), except the first layer at about 20%. Without the 5/3 gain, the activations shrink towards 0 layer by layer. With a much bigger gain, they saturate.
 2. **Gradient histograms per layer.** The gradients at the tanh outputs had a similar spread in all layers (standard deviation about $1$ to $2 \times 10^{-3}$). If gradients grow or shrink a lot as you go deeper, something's wrong.
@@ -121,11 +121,13 @@ with torch.no_grad():
             print(tuple(p.shape), f"{ratio:.2f}")   # aim for about -3
 ```
 
-These plots are cheap to make. What I like about them is that "training feels slow" turns into something you can actually see and fix.
+These plots are cheap to make. What I like about them: "training feels slow" turns into something you can actually see and fix.
 
 ## The easier way out
 
-Careful initialization works, but it breaks easily: change the architecture and you have to redo the maths. Normalization layers make networks much less sensitive to the starting scale. They rescale the pre-activations directly, during training. Batch normalization was the first popular one and has its own note in Deep Learning Foundations ([Batch normalization](/notes/batch-normalization/)). Transformers use layer normalization instead, which shows up in the GPT note. Even with normalization, a sensible starting scale and an output layer that starts near uniform still help.
+Careful initialization works, but it breaks easily. Change the architecture and you have to redo the maths. Normalization layers make networks much less sensitive to the starting scale, because they rescale the pre-activations directly during training. Batch normalization was the first popular one and has its own note in Deep Learning Foundations ([Batch normalization](/notes/batch-normalization/)). Transformers use layer normalization instead, which shows up in the GPT note. Even with normalization, a sensible starting scale and an output layer that starts near uniform still help.
+
+A similar network, with batch norm in it, is the one I later took apart in [Backprop by hand](/notes/manual-backprop-language-model/), writing every gradient myself.
 
 ## Key takeaways
 

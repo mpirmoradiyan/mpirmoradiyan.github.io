@@ -51,7 +51,7 @@ $$
 \beta_t(i) = p(x_{t+1:T} \mid z_t = i) = \sum_j A_{ij}\, B_{j, x_{t+1}}\, \beta_{t+1}(j), \qquad \beta_T(i) = 1.
 $$
 
-Then filtering is $\alpha_t$ normalised over states, and smoothing is $\alpha_t(i)\,\beta_t(i)$ normalised. Each forward step is "predict with the transition model, then update with the new observation". In practice you normalise $\alpha_t$ at every step, otherwise it underflows for long sequences.
+Then filtering is $\alpha_t$ normalised over states, and smoothing is $\alpha_t(i)\,\beta_t(i)$ normalised. Each forward step is "predict with the transition model, then update with the new observation", the same rhythm as the [Kalman filter](/notes/kalman-filter/), just with a discrete state instead of a Gaussian one. In practice you normalise $\alpha_t$ at every step, otherwise it underflows for long sequences.
 
 Smoothing is generally more accurate because it uses more evidence: a later reading of sector 7 rules out the robot being at sector 2 a step earlier. In my runs, smoothing got 59%, 71% and 69% of states right, while filtering got 43%, 51% and 65%.
 

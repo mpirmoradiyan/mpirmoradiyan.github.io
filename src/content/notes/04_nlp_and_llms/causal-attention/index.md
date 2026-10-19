@@ -23,11 +23,11 @@ sources:
 status: draft
 ---
 
-A GPT is trained to predict token $t+1$ from tokens $1$ to $t$, at every position of a sequence at the same time. If position $t$ could look at position $t+1$, it would just copy the answer. The training loss would drop to almost nothing, and the model would be useless when generating, because then the future doesn't exist yet. **Causal** (or masked) self-attention stops every token from looking at anything after it. Here I go through the mask, the clean way to apply it, and a neat matrix trick that sits behind it.
+Plain [self-attention](/notes/self-attention/) has a catch when you use it in a GPT. A GPT is trained to predict token $t+1$ from tokens $1$ to $t$, at every position of a sequence at the same time. But if position $t$ can look at position $t+1$, it just copies the answer. The training loss drops to almost nothing, and the model is useless when it has to write text, because then the future doesn't exist yet. **Causal** (or masked) self-attention fixes this: no token gets to look at anything after it. Below is the mask, the clean way to apply it, and a neat matrix trick that sits behind it.
 
 ## The trick: a running average as one matrix product
 
-Start with something simpler. For a sequence $x_1, \dots, x_T$, replace each $x_t$ by the average of $x_1, \dots, x_t$: the token itself and everything before it. A double loop works, but it's slow. A lower-triangular matrix (ones on and below the diagonal, zeros above) does it in one multiplication:
+Before any attention, start with something simpler. For a sequence $x_1, \dots, x_T$, replace each $x_t$ by the average of $x_1, \dots, x_t$: the token itself and everything before it. A double loop works, but it's slow. A lower-triangular matrix (ones on and below the diagonal, zeros above) does it in one multiplication:
 
 ```python
 import torch
@@ -68,7 +68,7 @@ $M$ is the mask: 0 where token $i$ is allowed to look at token $j$, and $-\infty
 
 Another way that feels natural is to do the full softmax, zero out the upper triangle, and then rescale each row so it adds up to 1 again. I wondered whether the future tokens would sneak in through the first softmax's denominator. They don't. It gives exactly the same numbers, because the rescaling removes their part completely. In my notebook, both versions gave the row `[0.5517, 0.4483, 0, 0, 0, 0]` for the second token.
 
-Still, masking the scores with $-\infty$ before the softmax is the usual choice. It's one step instead of three, and it's how PyTorch's fused attention kernels do it. For the mask itself, `torch.triu(torch.ones(T, T), diagonal=1)` marks the positions to hide (strictly above the diagonal), and `torch.tril` marks the ones to keep. Use whichever reads better to you.
+Still, masking the scores with $-\infty$ before the softmax is the usual choice, simply because it's one step instead of three. For the mask itself, `torch.triu(torch.ones(T, T), diagonal=1)` marks the positions to hide (strictly above the diagonal), and `torch.tril` marks the ones to keep. Use whichever reads better to you.
 
 ## Dropout on the attention weights
 
@@ -104,7 +104,9 @@ Three small things in there are easy to get wrong:
 - `register_buffer` keeps the mask inside the module, so it moves to the GPU with `model.to(device)` and gets saved in the state dict. But the optimizer doesn't treat it as something to train.
 - `self.mask[:T, :T]` cuts the mask down to the real sequence length. That way the same module works on sequences shorter than `context_length`, which happens all the time during generation.
 
-PyTorch also has `torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)`, which applies the same mask inside one fused kernel that uses less memory.
+PyTorch also has `torch.nn.functional.scaled_dot_product_attention(q, k, v, is_causal=True)`, which applies the same mask in one call and, on a GPU, can use a fused kernel that saves memory. With dropout off, it gives the same output as the module above.
+
+Real models run several of these heads side by side, which is the next step: [multi-head attention](/notes/multi-head-attention/).
 
 ## Where causal attention shows up
 

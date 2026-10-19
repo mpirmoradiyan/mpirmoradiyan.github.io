@@ -26,7 +26,7 @@ sources:
 status: draft
 ---
 
-Natural language inference (NLI) gives you two sentences, a premise and a hypothesis, and asks whether the premise **entails** the hypothesis, **contradicts** it, or is **neutral**. The task is about the relation between the two sentences, so a model that reads only one of them shouldn't do better than guessing. In the word embeddings lab, one of them did much better than guessing, and that was the most interesting result of the lab.
+Natural language inference (NLI) gives you two sentences, a premise and a hypothesis. The question: does the premise **entail** the hypothesis, **contradict** it, or is it **neutral**? The whole task is about how the two sentences relate. So a model that reads only one of them should do no better than guessing. In the word embeddings lab, one of these one-sided models did much better than guessing, and figuring out why was the most interesting part of the lab.
 
 ## The data
 
@@ -61,7 +61,7 @@ So a word like "nobody" predicts contradiction without reading the premise at al
 
 Bowman et al. used **cross-unigrams**: pairs $(w_1, w_2)$ where $w_1$ is in the premise, $w_2$ is in the hypothesis, and both have the same part-of-speech tag. A pair like `males__men` (two nouns) or `playing__sleeping` (two verbs) lets a linear model learn things a single sentence can't show, such as "males ↔ men supports entailment" and "playing ↔ sleeping suggests contradiction".
 
-The key is that each pair has to become **one** feature. Our transformer did this:
+The key is that each pair has to become **one** feature. This is where we slipped. Our transformer did this:
 
 ```python
 result += ' '.join((word2, word1))

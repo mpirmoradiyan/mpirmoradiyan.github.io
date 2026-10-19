@@ -27,17 +27,17 @@ sources:
 status: draft
 ---
 
-Cross-validation is how we guess a model's error on data it hasn't seen. But that guess is only honest if the test fold is as "new" to the model as real future data will be. When samples come in groups (many rows per patient, per field, per city, per sensor) or sit close together in space, a random split puts near-copies of each test row into the training set. So the score ends up measuring memory, not generalization, and it can be way too good.
+The puzzle that got me here: a model scores great in cross-validation, then does clearly worse on new data. Cross-validation is how we guess a model's error on data it hasn't seen. But that guess is only honest if the test fold is as "new" to the model as real future data will be. When samples come in groups (many rows per patient, per field, per city, per sensor) or sit close together in space, a random split puts near-copies of each test row into the training set. So the score ends up measuring memory, not how well the model works on new cases, and it can be way too good.
 
 ## The assumption hiding in random K-fold
 
-K-fold cross-validation shuffles the rows, cuts them into $K$ folds, trains on $K-1$ folds and tests on the one left over. The average test error is an estimate of the prediction error
+First, a quick reminder of what K-fold does. It shuffles the rows, cuts them into $K$ folds, trains on $K-1$ folds and tests on the one left over. The average test error is an estimate of the prediction error
 
 $$
 \text{Err} = \mathbb{E}\big[L(Y, \hat f(X))\big],
 $$
 
-where $L$ is the loss (for example squared error), $\hat f$ is the fitted model and $(X, Y)$ is a fresh sample. "Fresh" is the word that matters. The estimate is only unbiased when test rows are independent of training rows, the same way future data will be.
+where $L$ is the loss (for example squared error), $\hat f$ is the fitted model and $(X, Y)$ is a fresh sample. "Fresh" is the word that matters. The estimate is only trustworthy when test rows are independent of training rows, the same way future data will be.
 
 Grouped data breaks this. Rows from the same group share things the features may not fully capture: the same instrument, the same weather, the same soil, the same person. So their errors are correlated. If one row of a group is in training and its sibling is in test, the model can do well on the sibling just by recognizing the group. This is the part that clicked for me: in real use you'll usually predict for a *new* group, and that shortcut isn't there.
 
@@ -45,7 +45,7 @@ Spatial data has the same problem, even without explicit groups. Tobler's "first
 
 ## A small synthetic test
 
-The synthetic data below has 30 groups of 40 rows. The target depends on one real feature plus an offset per group. Two extra features act as a group "signature": they're almost constant inside a group and don't cause anything, but they give away which group a row belongs to.
+I wanted to see the size of the effect myself, so I made some fake data. It has 30 groups of 40 rows. The target depends on one real feature plus an offset per group. Two extra features act as a group "signature": they're almost constant inside a group and don't cause anything, but they give away which group a row belongs to.
 
 ```python
 import numpy as np
@@ -90,7 +90,7 @@ With random K-fold, the signature features look like a big win (3.13 down to 1.6
 
 ## Split by group, not by row
 
-The fix is simple to say: split by group, not by row. The common options:
+Once you see the problem, the fix is simple to say: split by group, not by row. The common options:
 
 - **Group K-fold**: put whole groups into $K$ folds, trying to keep the fold sizes balanced.
 - **Leave-one-group-out**: one fold per group. Closest to the real situation when you have few groups, but slow and noisy when groups are small.

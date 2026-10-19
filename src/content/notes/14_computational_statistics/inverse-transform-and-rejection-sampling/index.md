@@ -24,7 +24,7 @@ sources:
 status: draft
 ---
 
-Every simulation starts from a generator of uniform numbers on $(0, 1)$. Everything else, from normal draws to MCMC proposals, is built on top of that. The third computational statistics lab had us build two of the classic tools by hand: the inverse-CDF method (for the Laplace distribution) and rejection sampling (for the normal, using the Laplace as a helper).
+Where do the numbers from `rnorm()` actually come from? Underneath, the computer only makes uniform numbers on $(0, 1)$, and everything else, from normal draws to MCMC proposals, is built on top of them. The third computational statistics lab had us build two of the classic tools by hand: the inverse-CDF method (for the Laplace distribution) and rejection sampling (for the normal, using the Laplace as a helper).
 
 ## The inverse-CDF method
 

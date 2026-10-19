@@ -29,7 +29,7 @@ sources:
 status: draft
 ---
 
-A segmentation model gives you pixels, but a GIS wants polygons. Getting from one to the other takes a small set of standard tools: contour tracing, morphological operators, connected-component labelling and line simplification. Each one is simple on its own, and each one has its own way of quietly going wrong. So here I go through them one at a time on a synthetic mask, with the options and trade-offs for each. Fixing invalid polygons and measuring their shape is in [polygon validity and shape metrics](/notes/polygon-validity-and-shape-metrics/).
+A segmentation model gives you pixels, but a GIS wants polygons. Getting from one to the other takes a small set of standard tools: contour tracing, morphological operators, connected-component labelling and line simplification. Each one is simple on its own, and each one has its own way of quietly going wrong. I kept tripping over these, so here I go through them one at a time on a synthetic mask, with the options and trade-offs for each. Fixing invalid polygons and measuring their shape is in [polygon validity and shape metrics](/notes/polygon-validity-and-shape-metrics/).
 
 ![Left: a synthetic instance mask with four objects, ragged coloured edge pixels, pinholes, two stray squares and a purple piece split off the bottom of the green object. Middle: the same objects after cleaning, each one solid with a smooth edge and the purple piece absorbed into green. Right: grey contours and coloured simplified polygons with few vertices.](fig-mask-cleanup.png)
 

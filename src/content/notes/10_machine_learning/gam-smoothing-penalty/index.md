@@ -22,7 +22,7 @@ sources:
 status: draft
 ---
 
-A generalized additive model (GAM) is a regression where each predictor gets its own smooth curve instead of a straight line. You don't have to guess the shape in advance (a seasonal bump, a threshold, a plateau); the data decide, within limits set by a smoothing penalty. In a lab I modelled weekly mortality with a smooth function of the week of the year, and the part worth remembering is what that penalty does and how it's chosen.
+In a lab I had to model weekly mortality. It clearly went up in winter and down in summer, so a straight line in "week of the year" made no sense. But I also didn't want to guess the exact shape. That's what a generalized additive model (GAM) is for. Each predictor gets its own smooth curve instead of a straight line, and the data decide the shape. Well, almost: a smoothing penalty sets the limits. I got that penalty wrong in my plots, so this note is mostly about what it does and how it's chosen.
 
 ## The model
 

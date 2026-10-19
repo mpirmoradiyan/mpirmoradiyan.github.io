@@ -27,11 +27,11 @@ sources:
 status: draft
 ---
 
-An MLP always takes the same number of inputs. But text, speech and time series don't come in a fixed size, and order matters: "dog bites man" is not "man bites dog". A recurrent neural network (RNN) deals with this by reading one item at a time and keeping a **hidden state**, a vector that sums up everything it has seen so far. RNNs were the main tool for sequences until attention took over. For me the most useful part was seeing the problems they ran into, because those explain why LSTMs and transformers look the way they do.
+Here's the problem I started from. An MLP always takes the same number of inputs. But a sentence can be 3 words or 30, and order matters: "dog bites man" is not "man bites dog". So how do you feed text to a network? A recurrent neural network (RNN) answers this in a simple way. It reads one item at a time and keeps a **hidden state**, a vector that sums up everything it has seen so far. RNNs were the main tool for sequences until attention took over. For me the most useful part was seeing where they get stuck, because that explains why LSTMs and transformers look the way they do.
 
 ## The RNN cell
 
-At each time step $t$ the cell takes two things, the current item $x_t$ (for example a character embedding) and the previous hidden state $h_{t-1}$, and makes a new hidden state:
+At each time step $t$ the cell takes two things: the current item $x_t$ (say, a character embedding) and the previous hidden state $h_{t-1}$. It mixes them into a new hidden state:
 
 $$
 h_t = \tanh\left(W_{hh}\, h_{t-1} + W_{xh}\, x_t + b_h\right)
@@ -39,19 +39,19 @@ $$
 
 - $W_{xh}$ maps the input into the hidden space (input-to-hidden weights).
 - $W_{hh}$ maps the previous hidden state into the new one (hidden-to-hidden weights). This is the "recurrent" part.
-- $b_h$ is a bias and $\tanh$ keeps the values between -1 and 1.
+- $b_h$ is a bias, and $\tanh$ keeps the values between -1 and 1.
 
-To predict something, like the next character, put an output layer on top of the hidden state:
+If you want a prediction at each step, like the next character, put an output layer on top of the hidden state:
 
 $$
 y_t = W_{hy}\, h_t + b_y, \qquad p_t = \operatorname{softmax}(y_t).
 $$
 
-The initial state $h_0$ is usually a vector of zeros.
+The starting state $h_0$ is usually just a vector of zeros.
 
 ## Unrolling over time
 
-Reading "The cat sat" means using the same cell three times: "The" with $h_0$ gives $h_1$, "cat" with $h_1$ gives $h_2$, "sat" with $h_2$ gives $h_3$. If you draw it out step by step, the RNN looks like a deep feed-forward network with one layer per time step. The difference is that **every layer uses the same weights**. That sharing is what lets one small set of parameters handle sequences of any length.
+What helped me was drawing it out. Reading "The cat sat" means using the same cell three times: "The" with $h_0$ gives $h_1$, "cat" with $h_1$ gives $h_2$, "sat" with $h_2$ gives $h_3$. Drawn step by step, the RNN looks like a deep feed-forward network with one layer per time step. The twist is that **every layer uses the same weights**. That sharing is why one small set of parameters can handle a sequence of any length.
 
 ```python
 import numpy as np
@@ -73,22 +73,22 @@ print(h)
 
 ## Training: backpropagation through time
 
-The loss is added up (or averaged) over all time steps, $L = \sum_t L_t$, where $L_t$ is the cross-entropy of the prediction at step $t$. Doing backprop on the unrolled graph has its own name: **backpropagation through time** (BPTT). Since the weights are shared, the gradient for $W_{hh}$ is just the sum of what each time step contributes.
+The loss is added up (or averaged) over all time steps, $L = \sum_t L_t$, where $L_t$ is the cross-entropy of the prediction at step $t$. Then you just run backprop on the unrolled picture. It has its own name, **backpropagation through time** (BPTT), but it's normal backprop. Since the weights are shared, the gradient for $W_{hh}$ is simply the sum of what each time step contributes.
 
-The trouble is in how the gradient travels back through the hidden states. Each step back from $h_t$ to $h_{t-1}$ multiplies the gradient by the Jacobian (the matrix of partial derivatives)
+The trouble shows up when you follow the gradient back through the hidden states. Each step back, from $h_t$ to $h_{t-1}$, multiplies the gradient by this Jacobian (the matrix of partial derivatives):
 
 $$
 \frac{\partial h_t}{\partial h_{t-1}} = \operatorname{diag}\!\left(1 - h_t^2\right) W_{hh}.
 $$
 
-To reach a step $k$ positions back, the gradient gets multiplied by $k$ of these matrices. So basically it's like multiplying a number by itself over and over. If their size (roughly, the largest singular value of $W_{hh}$ times the tanh derivative) is below 1, the product shrinks very fast: the **vanishing gradient** problem. Then the network can't learn that a word early in the sentence matters for a prediction much later. If it's above 1, the product grows very fast: the **exploding gradient** problem, which makes training unstable.
+To reach a step $k$ positions back, the gradient gets multiplied by $k$ of these matrices. So basically it's like multiplying a number by itself over and over. If their size (roughly, the largest singular value of $W_{hh}$ times the biggest tanh derivative) is below 1, the product shrinks very fast. That's the **vanishing gradient** problem: the network can't learn that a word early in the sentence matters for a prediction much later. Above 1, the product can grow very fast instead. That's the **exploding gradient** problem, and it makes training jumpy and unstable.
 
 There are two usual fixes:
 
-- **Gradient clipping**: shrink the gradient whenever its size goes over some limit (`torch.nn.utils.clip_grad_norm_(model.parameters(), 5)`). This fixes explosions but not vanishing.
-- **Truncated BPTT**: go through a long text in chunks and call `hidden = hidden.detach()` between chunks. The hidden state still carries information forward, but gradients stop at the chunk border. That keeps each backward pass cheap.
+- **Gradient clipping**: shrink the gradient whenever its size goes over some limit (`torch.nn.utils.clip_grad_norm_(model.parameters(), 5)`). This fixes explosions but does nothing for vanishing.
+- **Truncated BPTT**: go through a long text in chunks and call `hidden = hidden.detach()` between chunks. The hidden state still carries information forward, but the gradient stops at the chunk border. That keeps each backward pass cheap.
 
-Vanishing gradients need a change to the network itself, and that's what the [LSTM](/notes/lstm/) does.
+Vanishing gradients need a change to the cell itself, and that's what the [LSTM](/notes/lstm/) does.
 
 ## A character-level RNN in PyTorch
 
@@ -109,9 +109,9 @@ class CharRNN(nn.Module):
         return self.head(out), h             # logits: (B, T, vocab)
 ```
 
-With `batch_first=True` the tensors are (batch, time, features). The returned `h` has shape (num_layers, batch, hidden), and you can pass it back in to keep going with a sequence.
+With `batch_first=True` the tensors are (batch, time, features). The returned `h` has shape (num_layers, batch, hidden), and you can pass it back in to keep going with the same sequence.
 
-I trained this on the Little Red Riding Hood story (about 1,200 characters, 42 different symbols), with windows of 25 characters where the target is the input shifted by one. After 10 epochs the samples repeated bits of the story, like "Red Riding Hood" and "As she walked the wolf", mixed with made-up words. That's memorizing, not really learning the language, which is what you'd expect from so little text.
+I trained this on the Little Red Riding Hood story (about 1,200 characters, 42 different symbols), using windows of 25 characters where the target is the input shifted by one. After 10 epochs the samples repeated bits of the story, like "Red Riding Hood" and "As she walked the wolf", mixed with made-up words. That's memorizing, not really learning the language, which is what you'd expect from so little text.
 
 ## Sampling with temperature
 
@@ -136,11 +136,11 @@ def generate(model, start_ids, length, temperature=1.0):
     return ids
 ```
 
-Reading the seed once and then feeding one character at a time, carrying the hidden state along, is how an RNN is meant to be used. My first version re-ran the whole padded window at every step. It worked, but it threw away the whole point of having a hidden state.
+My first version re-ran the whole padded window at every step. It worked, but it threw away the whole point of having a hidden state. Reading the seed once and then feeding one character at a time, carrying the hidden state along, is how an RNN is meant to be used.
 
 ## A note on evaluation
 
-My notebook reported a "test" accuracy of 0.86 for next-character prediction. Looking back, that number doesn't mean much: the test text was the last 10% of the same story the model was trained on, so it measured memorizing, not generalizing. A fair test set has to be text the model never saw during training.
+My notebook reported a "test" accuracy of 0.86 for next-character prediction. Looking back, that number doesn't mean much. The test text was the last 10% of the same story the model trained on, so it measured memorizing, not generalizing. A fair test set has to be text the model never saw during training.
 
 ## Where RNNs fall short
 
@@ -148,7 +148,7 @@ My notebook reported a "test" accuracy of 0.86 for next-character prediction. Lo
 - **One step at a time**: step $t$ needs $h_{t-1}$, so you can't run the time steps in parallel on a GPU.
 - **A fixed-size bottleneck**: everything the model knows about the past has to fit into one hidden vector.
 
-LSTMs and GRUs fix the first point with gates. Attention, and in the end the transformer, fix all three.
+LSTMs and GRUs ease the first point with gates; the [LSTM note](/notes/lstm/) picks up exactly there. The bottleneck shows up again when an RNN has to squeeze a whole input sentence into one vector for translation, which is the story of the [seq2seq encoder-decoder](/notes/seq2seq-encoder-decoder/). Attention, and in the end the transformer, deal with all three.
 
 ## Key takeaways
 

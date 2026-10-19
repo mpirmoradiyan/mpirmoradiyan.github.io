@@ -22,11 +22,11 @@ sources:
 status: draft
 ---
 
-The first text mining lab was a small search engine over about 1,600 app descriptions from the Google Play Store: type "dodge trains", get Subway Surfers. It's built from three ideas (tf-idf weights, vectors, cosine similarity), and two of my answers got small but useful details wrong.
+The first text mining lab was to build a small search engine over about 1,600 app descriptions from the Google Play Store. You type "dodge trains" and get Subway Surfers. It sounds like a big thing, but it's built from just three ideas: tf-idf weights, vectors and cosine similarity. Two of my answers got small details wrong, and those details turned out to be the useful part.
 
 ## Tf-idf in words
 
-Turn each document into a vector with one entry per word in the vocabulary. The entry should be high when a word is **frequent in this document** but **rare in the collection**. "Game" shows up in most app descriptions, so it says little about any one of them. "Railyard" is rare, so when it shows up it says a lot.
+The starting question: how do you turn a piece of text into numbers you can compare? Turn each document into a vector with one entry per word in the vocabulary. The entry should be high when a word is **frequent in this document** but **rare in the collection**. "Game" shows up in most app descriptions, so it says little about any one of them. "Railyard" is rare, so when it shows up it says a lot.
 
 $$
 \text{tfidf}(t, d) = \text{tf}(t, d) \cdot \text{idf}(t)
@@ -94,6 +94,8 @@ print(keywords(docs[2]))
 ## A practical note on preprocessing
 
 The lab plugged a spaCy function into the vectorizer as the tokenizer (lemmatise, drop stop words and non-alphabetic tokens). My function called `spacy.load(...)` *inside* the tokenizer, so the language model was reloaded for every one of the 1,614 documents and for every query. Load it once, outside the function. The results are the same, and it's much faster.
+
+Word-count vectors like these are also what a simple text classifier eats. The next lab used them to guess a speaker's party, in [Multinomial Naive Bayes for text](/notes/multinomial-naive-bayes-for-text/).
 
 ## Key takeaways
 

@@ -112,7 +112,7 @@ where $F$ is a few conv-BN-ReLU layers, and $x$ goes around them unchanged on a 
 
 Two details make it work in practice:
 
-- **Shape changes.** When a block halves the resolution or changes the number of channels, $x$ no longer matches $F(x)$. Then the shortcut uses a 1×1 conv with stride 2 (plus BN) to reshape it.
+- **Shape changes.** When a block halves the resolution or changes the number of channels, $x$ no longer matches $F(x)$. Then the shortcut uses a 1×1 conv (with stride 2 when the resolution halves) plus BN to reshape it.
 - **The bottleneck block.** ResNet-50 and deeper use 1×1 → 3×3 → 1×1 blocks: cut the channels by 4, do the 3×3 conv in the thin space, then expand back. It's the same 1×1 trick as Inception:
 
 ```python

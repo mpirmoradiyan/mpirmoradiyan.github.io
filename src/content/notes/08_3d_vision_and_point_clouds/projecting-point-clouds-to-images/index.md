@@ -60,7 +60,7 @@ The width is twice the height because azimuth covers $2\pi$ and the polar angle 
 
 The thing to keep in mind: here a pixel is an angle, not a length. A pixel covers more ground the farther away it looks, so nearby surfaces get lots of points and distant ones get few. Above the horizon there's often nothing at all.
 
-A spinning LiDAR fits this projection really well. Its lasers sit at fixed, known elevation angles, so if you use one image row per laser and one column per firing step, every measurement gets its own pixel and nothing collides. Networks like SqueezeSeg and RangeNet++ segment LiDAR scans in exactly this form and then copy the labels back to the points.
+A spinning LiDAR fits this projection really well. Its lasers sit at fixed, known elevation angles, so if you use one image row per laser and one column per firing step, almost every measurement gets its own pixel and very few collide. In practice you also squeeze the rows to the sensor's vertical field of view (often only a few tens of degrees) instead of the full $0$ to $\pi$, or most rows stay empty. Networks like SqueezeSeg and RangeNet++ segment LiDAR scans in this form and then copy the labels back to the points.
 
 ## Which point gets the pixel: the z-buffer
 

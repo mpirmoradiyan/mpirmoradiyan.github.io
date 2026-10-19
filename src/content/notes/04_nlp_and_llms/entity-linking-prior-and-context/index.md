@@ -26,11 +26,11 @@ sources:
 status: draft
 ---
 
-Entity linking answers "which real thing does this name refer to?". In *Lincoln beat Swansea*, "Lincoln" is a football club, not the president or the city in Nebraska. The information extraction lab built a small pipeline on news text annotated with Wikipedia page names: find mention spans with spaCy, then link each span to a page. Each step had a simple idea behind it and a clear jump in the scores.
+Read *Lincoln beat Swansea*. You know right away that "Lincoln" is a football club, not the president or the city in Nebraska. A computer doesn't. Entity linking is the task of answering "which real thing does this name refer to?". In the information extraction lab we built a small pipeline for it on news text annotated with Wikipedia page names: find the names (mention spans) with spaCy, then link each one to a page. What I liked is that each step had a simple idea behind it, and each one gave a clear jump in the scores.
 
 ## Scoring with sets
 
-Both steps were scored the same way. Put the gold items and predicted items in two sets (a span is `(sentence_id, start, end)`, a link adds the page name) and compute
+First, how do you even score this? Both steps were scored the same way. Put the gold items and predicted items in two sets (a span is `(sentence_id, start, end)`, a link adds the page name) and compute
 
 $$
 P = \frac{|G \cap \hat{S}|}{|\hat{S}|}, \qquad R = \frac{|G \cap \hat{S}|}{|G|}, \qquad F_1 = \frac{2PR}{P + R}
@@ -63,7 +63,7 @@ For "Sweden" that's 0.986 for the country and 0.014 for the national football te
 
 ## Step 4: context-sensitive disambiguation
 
-For ambiguous mentions, use the words around them. For each mention with several candidate pages, train a small Multinomial Naive Bayes classifier on contexts (5 tokens left and right) where the mention linked to each page. Use $P(e \mid m)$ as the class prior, so the classifier picks
+The prior always picks the same page for "Lincoln", whatever the sentence says. For the ambiguous mentions, the obvious next step is to look at the words around them. For each mention with several candidate pages, train a small Multinomial Naive Bayes classifier on contexts (5 tokens left and right) where the mention linked to each page. Use $P(e \mid m)$ as the class prior, so the classifier picks
 
 $$
 \hat e = \arg\max_e \Big[\log P(e \mid m) + \sum_{w \in \text{context}} \log P(w \mid e)\Big]
@@ -82,7 +82,8 @@ def train_linker(contexts, entities, prior):
     """One classifier per ambiguous mention. prior: {entity: P(entity | mention)}."""
     classes = sorted(set(entities))                 # sklearn orders classes alphabetically
     nb = MultinomialNB(class_prior=[prior[e] for e in classes])
-    return make_pipeline(CountVectorizer(), nb).fit(contexts, entities)
+    vec = CountVectorizer(token_pattern=r"\S+")    # keep '@' (the default pattern drops it)
+    return make_pipeline(vec, nb).fit(contexts, entities)
 
 def link(tokens, beg, end, clf, window=5):
     # Same format as the training contexts: mention replaced by '@'
@@ -94,7 +95,7 @@ def link(tokens, beg, end, clf, window=5):
 # president, and "they drove to Lincoln last week" (no useful context) to the prior's choice.
 ```
 
-The order of `class_prior` has to match the classifier's sorted class names. That's easy to get silently wrong.
+Two details here are easy to get silently wrong. The order of `class_prior` has to match the classifier's sorted class names. And scikit-learn's default token pattern only keeps words of two or more letters or digits, so it would quietly throw the `@` away. That's why the vectorizer splits on whitespace instead.
 
 ## Key takeaways
 

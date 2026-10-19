@@ -25,7 +25,7 @@ sources:
 status: draft
 ---
 
-A support vector machine looks for the boundary with the widest gap between classes. Real data overlap, so a perfect gap usually doesn't exist, and the SVM needs a knob that says how much to care about points on the wrong side. That knob is $C$. I tuned it in a spam-classification lab, and in hindsight the way I *chose* it taught me more than the parameter itself.
+In a spam-classification lab I tuned an SVM, proudly reported 2.87% error, and called it "a good performance". Looking back, that number meant almost nothing, and working out why taught me more than the SVM itself. First the idea. A support vector machine looks for the boundary with the widest gap between classes. But real data overlap, so a clean gap usually doesn't exist. The SVM needs a knob that says how much to care about points on the wrong side. That knob is $C$.
 
 ## The soft-margin problem
 
@@ -83,9 +83,9 @@ final <- svm(y ~ ., data = rbind(tr, va), kernel = "radial", gamma = 2, cost = b
 err(final, te)         # about 0.15: the one number to report
 ```
 
-In this run the training error falls from 0.47 to 0.10 as $C$ goes from 0.01 to 1000, the number of support vectors drops from 285 to 119, and the validation error is lowest at $C = 1$ (0.16) and climbs again after that.
+In this run the training error falls from 0.47 to 0.10 as $C$ goes from 0.01 to 1000, the number of support vectors drops from 285 to 119, and the validation error is lowest at $C = 1$ (0.16) and is higher (about 0.19 to 0.21) for every larger $C$.
 
-Two more things worth remembering. $C$ and the kernel width (`sigma` in kernlab, `gamma` in e1071) interact, so tune them together on a grid. And scale the features first; the RBF kernel uses Euclidean distance, so a feature measured in large units would dominate.
+Two more things worth remembering. $C$ and the kernel width (`sigma` in kernlab, `gamma` in e1071) interact, so tune them together on a grid. And scale the features first; the RBF kernel uses Euclidean distance, so a feature measured in large units would dominate. (`e1071::svm` does this for you by default, `scale = TRUE`.)
 
 ## Key takeaways
 

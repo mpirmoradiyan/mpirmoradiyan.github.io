@@ -18,7 +18,7 @@ sources:
 status: draft
 ---
 
-Gibbs sampling is the MCMC method that feels most like cheating. If the joint posterior of several parameters is hard, but each parameter's distribution *given all the others* is easy, you just cycle through those easy conditionals, and the sequence of draws converges to the joint posterior. In the third Bayesian Learning lab (pair work) we used it on daily precipitation data: first a plain normal model, then a two-component normal mixture.
+Gibbs sampling is the MCMC method that feels most like cheating. The joint posterior of several parameters is hard, but each parameter on its own, *given all the others*, is easy. So you just take turns drawing from those easy pieces, and the draws end up following the joint posterior. In the third Bayesian Learning lab (pair work) we tried it on daily precipitation data. A plain normal model went smoothly. Then we tried a two-component mixture, and that's where I learned the most, mostly from a bug.
 
 ## The basic idea
 
@@ -27,7 +27,7 @@ Say the parameters are $\theta = (\theta_1, \theta_2)$. One Gibbs iteration is:
 1. draw $\theta_1^{(t)} \sim p(\theta_1 \mid \theta_2^{(t-1)}, y)$,
 2. draw $\theta_2^{(t)} \sim p(\theta_2 \mid \theta_1^{(t)}, y)$.
 
-Each conditional is called a *full conditional*. The draws form a Markov chain whose stationary distribution is the joint posterior $p(\theta_1, \theta_2 \mid y)$. Every draw is accepted, so there's no tuning, unlike [random-walk Metropolis](/notes/random-walk-metropolis/).
+Each conditional is called a *full conditional*. The draws form a Markov chain whose stationary distribution is the joint posterior $p(\theta_1, \theta_2 \mid y)$. Every draw is accepted, so there's no step size to tune, unlike [random-walk Metropolis](/notes/metropolis-hastings-and-gelman-rubin/). For a worked derivation of full conditionals by completing the square, and an indexing bug that breaks the sweep, see [Gibbs sampling for a random-walk smoother](/notes/gibbs-sampling-full-conditionals/).
 
 ## Normal model with a semi-conjugate prior
 
@@ -59,7 +59,7 @@ where $\pi$ is the weight of component 1. The likelihood is a product of sums, w
 2. For each component $k$: draw $\mu_k$ and $\sigma_k^2$ from the normal-model conditionals above, **using only the points with $z_i = k$**.
 3. For each observation: $\Pr(z_i = 1 \mid \cdot) = \frac{\pi N(y_i \mid \mu_1, \sigma_1^2)}{\pi N(y_i \mid \mu_1, \sigma_1^2) + (1-\pi) N(y_i \mid \mu_2, \sigma_2^2)}$.
 
-Adding latent variables to make conditionals easy is called *data augmentation*. The same idea is behind EM for mixtures.
+Adding latent variables to make conditionals easy is called *data augmentation*. The same idea is behind EM for mixtures, which uses soft label probabilities instead of sampled labels (see [EM for Bernoulli mixtures](/notes/em-for-bernoulli-mixtures/)).
 
 **A bug in my draft.** In step 2, my code computed each component's variance update with `sum((x - mu1)^2)` over *all* observations instead of just the ones assigned to that component. The mean update used the right subset, the variance didn't. That makes both variances look like the overall variance and blurs the two components together. It's an easy slip because the normal-model code is copied and only half-adapted.
 
@@ -95,7 +95,7 @@ The true values were $\pi = 0.6$, means 10 and 50, variances 25 and 400, so the 
 ## Two things to watch with mixtures
 
 - **Plot the mixture, not the components.** To compare with a histogram, the fitted density is $\pi N(\mu_1, \sigma_1^2) + (1-\pi)N(\mu_2, \sigma_2^2)$ on one curve. Plotting the two normals separately (as in my draft) doesn't show the fit, and neither does a normal with the data's own mean and variance.
-- **Label switching.** Nothing in the model says which component is "1". In long runs, or with symmetric priors, the chain can swap the labels, and then posterior means of $\mu_1$ average over both components. Starting values that separate the components and checking trace plots help; an ordering constraint like $\mu_1 < \mu_2$ is the usual fix.
+- **Label switching.** Nothing in the model says which component is "1". In long runs, or with symmetric priors, the chain can swap the labels, and then posterior means of $\mu_1$ average over both components. Starting values that separate the components and checking trace plots help. A common fix is an ordering constraint like $\mu_1 < \mu_2$, though it doesn't always work well; Stephens (2000) discusses relabelling methods.
 
 ## Key takeaways
 

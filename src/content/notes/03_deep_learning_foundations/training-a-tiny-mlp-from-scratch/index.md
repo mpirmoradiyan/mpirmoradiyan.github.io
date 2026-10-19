@@ -23,7 +23,7 @@ sources:
 status: draft
 ---
 
-Once you have something that computes gradients, a neural network is really just a tidy way to organise lots of `Value` objects. Here I build a multi-layer perceptron (MLP, a stack of fully connected layers) on top of the micrograd-style engine from the previous note, train it with plain gradient descent on four examples, and look at a mistake I think almost everyone makes once: forgetting to reset the gradients.
+Once you have something that computes gradients, a neural network is really just a tidy way to organise lots of `Value` objects. Here I build a multi-layer perceptron (MLP, a stack of fully connected layers) on top of the micrograd-style engine from the [backpropagation note](/notes/backpropagation-micrograd/), train it with plain gradient descent on four examples, and look at a mistake I think almost everyone makes once: forgetting to reset the gradients.
 
 ## A few more operations
 

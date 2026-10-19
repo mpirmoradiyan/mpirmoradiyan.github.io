@@ -67,11 +67,11 @@ def read_xmp(path):
     meta = {}
     for desc in ET.fromstring(m.group(0)).iter(RDF + "Description"):
         for key, value in desc.attrib.items():
-            meta[key.split("}")[1]] = value      # strip the namespace URI
+            meta[key.split("}")[-1]] = value     # strip the namespace URI
     return meta
 ```
 
-On a synthetic image this returns `{'GpsLatitude': '+46.5000000', 'RelativeAltitude': '+120.10', 'GimbalPitchDegree': '-90.00', ...}`. The values are strings, so you have to convert them. Some writers use child elements instead of attributes, so a full reader should handle both. In practice **ExifTool** is the most complete reader. It knows thousands of tags, including maker-specific ones, and handles every file type. Its Python wrapper gives back a dictionary per file with keys like `XMP:RelativeAltitude`. Lighter Python options (exifread, Pillow) are fine for standard EXIF. I tried several of these, and what I took away was that they don't agree on tag names or on what they return when a tag is missing. So pick one, check which tags are missing across a batch before trusting it, and sanity-check the values (types, ranges) before using them.
+On a synthetic image this returns `{'GpsLatitude': '+46.5000000', 'RelativeAltitude': '+120.10', 'GimbalPitchDegree': '-90.00', ...}`. The values are strings, so you have to convert them. Some writers use child elements instead of attributes, so a full reader should handle both. In practice **ExifTool** is the most complete reader. It knows thousands of tags, including maker-specific ones, and reads almost every image file type. Its Python wrapper gives back a dictionary per file with keys like `XMP:RelativeAltitude`. Lighter Python options (exifread, Pillow) are fine for standard EXIF. I tried several of these, and what I took away was that they don't agree on tag names or on what they return when a tag is missing. So pick one, check which tags are missing across a batch before trusting it, and sanity-check the values (types, ranges) before using them.
 
 ## Which altitude?
 

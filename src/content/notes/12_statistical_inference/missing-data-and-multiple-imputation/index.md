@@ -94,6 +94,8 @@ $\bar Q$ is the final estimate. $\bar U$ is the ordinary within-dataset uncertai
 
 Multiple imputation still assumes MAR. It fixes the "too confident" problem of single imputation, not the bias of MNAR.
 
+Imputation isn't the only route. Under MAR you can also skip filling in and maximise the likelihood of the data you actually have; [the EM algorithm](/notes/em-algorithm-for-missing-data/) is one way to do that.
+
 ## Key takeaways
 
 - MCAR: missingness is pure chance. MAR: it depends only on observed data. MNAR: it depends on the missing values or on unrecorded variables.

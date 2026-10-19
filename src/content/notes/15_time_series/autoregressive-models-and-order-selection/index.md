@@ -26,7 +26,7 @@ sources:
 status: draft
 ---
 
-An autoregressive (AR) model predicts the next value of a series from its own last few values. It's the first model you reach for with a time series, and the nice surprise is that fitting it is plain linear regression. The hard part isn't the fitting. It's deciding how many past values to use. I worked through this in a course lab on NASA's global mean sea level data.
+My first time-series lab handed me NASA's global mean sea level data and one question: can you predict the next value from the last few? That's an autoregressive (AR) model. The nice surprise was that fitting one is just plain linear regression. The hard part turned out to be something else: deciding how many past values to use.
 
 ## The model
 
@@ -103,7 +103,7 @@ One bug I had in my own lab code: inside my fitting function I built the lag mat
 
 ## Choosing $p$ with a validation set
 
-Training error can only go down as $p$ grows, because a bigger model can always set the extra coefficients to zero. So training error can't pick $p$. Instead I fitted models for $p = 2, \dots, 150$ on the first 700 points and computed the one-step MSE on the remaining 297.
+Training error keeps going down as $p$ grows, because a bigger model can always set the extra coefficients to zero. (Not perfectly smoothly in the code above, since each $p$ drops a different number of early targets, but that's the trend.) So training error can't pick $p$. Instead I fitted models for $p = 2, \dots, 150$ on the first 700 points and computed the one-step MSE on the remaining 297.
 
 ![Training and validation one-step MSE of AR(p) models on the detrended sea-level data, for p from 2 to 150. Training error falls steadily; validation error drops around p = 40, stays low, and creeps up for large p.](fig-ar-order-selection.png)
 

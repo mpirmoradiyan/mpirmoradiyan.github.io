@@ -29,9 +29,11 @@ sources:
 status: draft
 ---
 
-For the text mining project I classified about 45,000 coronavirus tweets as negative, neutral or positive with three kinds of models: Multinomial Naive Bayes, tree ensembles (Random Forest and AdaBoost) on n-gram counts, and a bidirectional LSTM. The ranking came out as you'd guess: Naive Bayes at about 0.68 test accuracy, the ensembles at about 0.79 to 0.81, and the LSTMs around 0.87. My report explained the whole ranking with one story: "word order and dependencies matter". Looking back, that story fits the LSTM but not the ensembles, and a few evaluation details make the comparison look cleaner than it really was.
+For the text mining project I sorted about 45,000 coronavirus tweets into negative, neutral or positive. I tried three kinds of models: Multinomial Naive Bayes, tree ensembles (Random Forest and AdaBoost) on n-gram counts, and a bidirectional LSTM. The ranking came out as you'd guess. Naive Bayes got about 0.68 test accuracy, the ensembles about 0.79 to 0.81, and the LSTMs around 0.87. In my report I explained the whole ranking with one neat story: "word order and dependencies matter". When I went back to it later, that story only fit the LSTM, not the ensembles. And a few evaluation details made the comparison look cleaner than it really was.
 
 ## What each model sees
+
+The question that cleared things up for me was simple: what can each model actually see?
 
 **Bag-of-words Naive Bayes** sees word counts and nothing else. "Not good, bad" and "good, not bad" are the same input. On top of that, it assumes every word is independent of the others given the class.
 
@@ -39,11 +41,11 @@ For the text mining project I classified about 45,000 coronavirus tweets as nega
 
 **N-grams** add *local* order back into a bag-of-words model. With bigrams, "not good" becomes its own feature. For AdaBoost the best features were unigrams to trigrams combined. For Random Forest, unigrams worked best.
 
-**An LSTM** reads the tokens in sequence (in both directions for a bidirectional LSTM), so it can in principle use order and long-range context. It also learns its own word embeddings, so similar words get similar vectors and rare words can borrow strength from common ones. My model was embedding (100) → bidirectional LSTM (100 units) → global max pooling over time → softmax over 3 classes. Its gain over the ensembles probably comes from both order and learned embeddings. The experiment can't separate the two.
+**An LSTM** reads the tokens in sequence (in both directions for a bidirectional LSTM), so it can in principle use order and long-range context. It also learns its own word embeddings, so similar words get similar vectors and rare words can borrow strength from common ones. My model was embedding (100) → bidirectional LSTM (100 units) → global max pooling over time → softmax over 3 classes. Its gain over the ensembles could come from word order, from the learned embeddings, or from both. The experiment can't tell them apart.
 
 ## The stop-word trap
 
-The report describes stop-word removal as part of preprocessing, and in the code the Naive Bayes and ensemble pipelines did it inside the vectorizer (`stop_words="english"`). For topic classification that's usually harmless. For sentiment it's a real problem, because the standard lists contain negations. scikit-learn's `stop_words="english"` includes *not, no, nor, never, nothing, none, cannot* and *against*. NLTK's and spaCy's lists also include *not*, *no* and *nor*.
+Stop-word removal looked like a harmless cleaning step, so the Naive Bayes and ensemble pipelines did it inside the vectorizer (`stop_words="english"`). For topic classification that's usually fine. For sentiment it's a real problem, because the standard lists contain negations. scikit-learn's `stop_words="english"` includes *not, no, nor, never, nothing, none, cannot* and *against*. NLTK's and spaCy's lists also include *not*, *no* and *nor*.
 
 ```python
 from sklearn.feature_extraction.text import CountVectorizer, ENGLISH_STOP_WORDS
@@ -62,7 +64,7 @@ print(vec.fit(tweets).get_feature_names_out())
 
 After stop-word removal, "the store is good" and "the store is not good" give the same features, so even bigrams can't help. For sentiment, keep negations, or skip stop-word removal and let the model (or idf weighting) decide.
 
-There's a second problem here. The LSTM was fed the cleaned tweets *without* stop-word removal, so it still saw every *not* and *no*, while the bag-of-words models didn't. Part of the LSTM's lead may come from that difference in input, not from the architecture. A fair comparison gives every model the same preprocessed text.
+And there's a second catch. The LSTM was fed the cleaned tweets *without* stop-word removal, so it still saw every *not* and *no*, while the bag-of-words models didn't. Part of the LSTM's lead may come from that difference in input, not from the architecture. A fair comparison gives every model the same preprocessed text.
 
 ## Evaluation details that matter
 

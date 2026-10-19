@@ -27,11 +27,11 @@ sources:
 status: draft
 ---
 
-A plain RNN pushes its whole memory through a tanh and a weight matrix at every step. So after a few dozen steps the gradients fade away (or blow up). Take a sentence like "The cat, which was very old and grey, sat on the mat". To get "sat" right, the model has to carry "cat" across that whole middle part. The Long Short-Term Memory (LSTM) cell, from 1997, fixes this with a separate memory track and learned gates that decide what to keep, what to add and what to show.
+I came to LSTMs straight from the plain [RNN](/notes/recurrent-neural-networks/), and the problem was still fresh: the RNN's gradient fades away (or blows up) after a few dozen steps, so it can't connect things that are far apart. Take "The cat, which was very old and grey, sat on the mat". To get "sat" right, the model has to carry "cat" across that whole middle part. The Long Short-Term Memory (LSTM) cell is the fix. It adds a separate memory track and learned gates that decide what to keep, what to add and what to show.
 
 ## Two states instead of one
 
-An LSTM passes two vectors from one step to the next:
+The first thing that's different: an LSTM passes two vectors from one step to the next, not one.
 
 - the **cell state** $c_t$, a long-term memory that only gets changed by element-wise multiplication and addition;
 - the **hidden state** $h_t$, the short-term output that the next layer (and the next time step) reads.
@@ -53,7 +53,7 @@ h_t &= o_t \odot \tanh(c_t) && \text{new hidden state}
 \end{aligned}
 $$
 
-Each $W$ has shape (hidden, hidden + input). So an LSTM has four times the parameters of a plain RNN with the same hidden size.
+Each $W$ has shape (hidden, hidden + input). So an LSTM has four times the parameters of a plain RNN with the same hidden size. One bit of history: the 1997 LSTM had no forget gate. Gers, Schmidhuber and Cummins added it in 2000, and the version above, with the forget gate, is the one everyone uses now.
 
 Back to the example sentence. While the middle part is read, the forget gate can stay close to 1 on the units that store "the subject is one cat". The input gate can stay closed for the unimportant words. And the output gate can let that information out when the verb comes. Nobody programs these roles, though. The gates learn them from data.
 
@@ -76,7 +76,7 @@ def lstm_step(x, h_prev, c_prev, P):
 
 ## Why the cell state fixes vanishing gradients
 
-This is the part that made LSTMs click for me. Look at how the gradient flows back along the cell state. Since $c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t$, the direct path gives
+This is the part that made LSTMs click for me. In the RNN, every step back multiplies the gradient by the weight matrix and a tanh derivative. Now look at how the gradient flows back along the cell state instead. Since $c_t = f_t \odot c_{t-1} + i_t \odot \tilde{c}_t$, the direct path gives
 
 $$
 \frac{\partial c_t}{\partial c_{t-1}} = \operatorname{diag}(f_t) \quad (\text{plus smaller terms through the gates}).
@@ -86,7 +86,7 @@ On this path there's no weight matrix multiplied again and again, and no tanh sq
 
 A common trick is to start the forget-gate bias at a positive value (for example 1), so the cell remembers by default at the start of training.
 
-The **GRU** (gated recurrent unit) is a lighter version with two gates and no separate cell state. It often works about as well with fewer parameters.
+The **GRU** (gated recurrent unit) is a lighter cousin with two gates and no separate cell state. It often works about as well with fewer parameters.
 
 ## Using `nn.LSTM` in PyTorch
 
@@ -109,7 +109,7 @@ class CharLSTM(nn.Module):
         return self.head(self.drop(out)), state   # (B, T, vocab)
 ```
 
-The `dropout` argument of `nn.LSTM` only works between stacked layers, which is why it's set to 0 when there's just one layer. Training is the usual loop, plus gradient clipping (capping how big the gradients can get):
+The `dropout` argument of `nn.LSTM` only acts between stacked layers, which is why it's set to 0 when there's just one layer. Training is the usual loop, plus gradient clipping (capping how big the gradients can get):
 
 ```python
 for x, y in loader:                          # shuffled windows of 25 characters
@@ -121,9 +121,11 @@ for x, y in loader:                          # shuffled windows of 25 characters
     opt.step()
 ```
 
+Here all windows have the same length. When sentences have different lengths and you pad them, the padding needs masking, or it quietly skews both training and the scores. I wrote that story up in [padding and masking in sequence tagging](/notes/padding-and-masking-in-sequence-tagging/).
+
 ## Two mistakes I made with the state
 
-**Carrying the state across shuffled batches.** My first training loop passed the `(h, c)` from one batch into the next, after detaching it. That's the right thing to do for truncated backpropagation through time, when each batch continues the text of the previous one. But with a shuffled `DataLoader` of independent windows, batch $k+1$ has nothing to do with batch $k$. So the carried state is just noise from some unrelated bit of text. It also crashes when the last batch is smaller than the others, because the state has the wrong batch size. For shuffled windows, start every batch from a zero state (pass `None`). For back-to-back chunks of one long text, carry the state and detach both tensors: `state = tuple(s.detach() for s in state)`.
+**Carrying the state across shuffled batches.** My first training loop passed the `(h, c)` from one batch into the next, after detaching it. That's the right move for truncated backpropagation through time, when each batch continues the text of the previous one. But with a shuffled `DataLoader` of independent windows, batch $k+1$ has nothing to do with batch $k$. So the carried state is just noise from some unrelated bit of text. It also crashes when the last batch is smaller than the others, because the state has the wrong batch size. For shuffled windows, start every batch from a zero state (pass `None`). For back-to-back chunks of one long text, carry the state and detach both tensors: `state = tuple(s.detach() for s in state)`.
 
 **Validating on training data.** I made a "validation" split with `random_split` from the same windows the model trained on. Overlapping windows from the same story share almost all their characters, so the validation loss looked great but didn't really mean anything. A proper split sets aside a separate part of the text before making any windows.
 
@@ -137,7 +139,7 @@ $$
 \text{PPL} = \exp\Big(-\frac{1}{N}\sum_{t=1}^{N} \log p(x_t \mid x_{<t})\Big).
 $$
 
-The easy way to read it: roughly how many equally likely options the model is torn between at each step. A perplexity of 1 means it's certain. A pure random guess over 42 characters gives 42.
+The easy way to read it: roughly how many equally likely options the model is torn between at each step. A perplexity of 1 means it always gives the right character probability 1. A model that guesses uniformly over 42 characters gets exactly 42.
 
 ## Key takeaways
 

@@ -31,11 +31,11 @@ sources:
 status: draft
 ---
 
-A language model never sees text, only integers. The tokenizer is the thing that chops text into pieces and gives each piece a number. I used to think of it as a boring preprocessing step, but it affects almost everything after it: how long sequences get, how much text fits in the context window, and how well the model copes with rare words, code, numbers and non-English text. A lot of weird LLM behaviour, like being bad at spelling or arithmetic, comes back to tokenization. These notes cover the basic trade-off, the byte-pair encoding (BPE) algorithm the GPT models use, and the extra pieces around it.
+A language model never sees text. It only sees integers. The tokenizer is the thing that chops text into pieces and gives each piece a number. I used to think of it as a boring preprocessing step. It isn't. It decides how long sequences get, how much text fits in the context window, and how well the model copes with rare words, code, numbers and non-English text. A lot of weird LLM behaviour, like being bad at spelling or arithmetic, comes back to tokenization. So here's the basic trade-off, the byte-pair encoding (BPE) algorithm the GPT models use, and the extra pieces around it.
 
 ## Characters, words, or something in between?
 
-There are two obvious choices, and both have problems.
+The first question is what a "piece" should be. There are two obvious choices, and both have problems.
 
 - **Characters.** The vocabulary is tiny (65 symbols for the Shakespeare text in the GPT note), but sequences get long. 1,024 characters is only about a paragraph, and attention gets more expensive as sequences grow.
 - **Words.** Sequences are short, but the vocabulary is huge and still never complete. A simple word-level tokenizer built from the short story *The Verdict* (split on spaces and punctuation with a regex) had 1,130 entries. It broke on the very first word of "Hello, do you like tea?", because "Hello" never shows up in the story. The usual fix is an `<|unk|>` ("unknown") token, but then the model has no idea what the word actually was.
@@ -44,7 +44,7 @@ There are two obvious choices, and both have problems.
 
 ## Start from bytes, not characters
 
-Unicode has well over 100,000 characters. That's way too many to use as a starting vocabulary. A Python string is a list of Unicode code points (one number per character), and `str.encode("utf-8")` turns it into bytes. UTF-8 uses 1 byte for plain ASCII and 2 to 4 bytes for everything else. So if you work with bytes, you start with exactly 256 symbols and can still write any text at all, emoji included. The catch is that non-ASCII text gets long. The merges below are what fix that.
+Unicode has well over 100,000 characters. Way too many for a starting vocabulary. A Python string is a list of Unicode code points (one number per character), and `str.encode("utf-8")` turns it into bytes. UTF-8 uses 1 byte for plain ASCII and 2 to 4 bytes for everything else. So if you work with bytes, you start with exactly 256 symbols and can still write any text at all, emoji included. The catch is that non-ASCII text gets long. The merges below fix that.
 
 ```python
 text = "Ｕｎｉｃｏｄｅ! 😄 The very name strikes fear..."
@@ -95,7 +95,7 @@ My first version of `merge` used `enumerate` and `list.pop` inside the loop. It 
 
 ## Encoding and decoding
 
-**Decoding** is the easy direction: turn each id back into its bytes and glue them together. The bytes for a merged id are just the bytes of its two parents, built up in the order the merges were made:
+**Decoding** is the easy direction. Turn each id back into its bytes and glue them together. The bytes for a merged id are just the bytes of its two parents, built up in the order the merges were made:
 
 ```python
 def decode(ids, merges):
@@ -140,7 +140,7 @@ print(re.findall(gpt2pat, "Hello world! you're better"))
 
 In plain words, the pattern keeps common English contractions separate, groups letters together (with an optional space in front), keeps numbers apart from letters, and deals with runs of spaces. Two quirks I noticed: the contraction rules only match lowercase forms, so `'S` in all-caps text gets split differently, and the whole thing is built around English.
 
-GPT-4's tokenizer (`cl100k_base`) uses an improved pattern and about 100,000 tokens. One easy-to-see difference is spaces: GPT-2 encodes `"   hello world !"` as `[220, 220, 23748, 995, 5145]`, using a token for each leading space, while `cl100k_base` gives `[256, 24748, 1917, 758]` with the spaces grouped. For indented code that's a big deal.
+GPT-4's tokenizer (`cl100k_base`) uses an improved pattern and about 100,000 tokens. One easy-to-see difference is spaces. GPT-2 encodes `"   hello world !"` as `[220, 220, 23748, 995, 5145]`, with a token for each leading space, while `cl100k_base` gives `[256, 24748, 1917, 758]` with the spaces grouped. For indented code that's a big deal.
 
 ## Special tokens and the GPT-2 vocabulary
 
@@ -159,6 +159,8 @@ for t in enc.encode("Akwirw ier"):
 ```
 
 There's no `<|unk|>` token at all. A made-up word like "Akwirw" just gets broken into smaller known pieces, down to single bytes if needed. For me that's the nicest thing about byte-level BPE: nothing is ever "unknown".
+
+What happens next? The ids get cut into training windows, which is in [Preparing text for LLM training](/notes/text-data-for-llms/), and the 50,257-token vocabulary sets the size of the embedding and output layers in [the GPT-2 architecture](/notes/gpt2-architecture/).
 
 ## Key takeaways
 

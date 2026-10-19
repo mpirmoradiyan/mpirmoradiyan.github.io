@@ -27,7 +27,7 @@ sources:
 status: draft
 ---
 
-A transformer works on a sequence of vectors. An image is a grid of pixels. The Vision Transformer (ViT) connects the two in the simplest way you could think of: cut the image into square patches, turn each patch into one vector, and give that sequence to a normal transformer encoder. Almost nothing image-specific is left in the model. That's both why it's nice and why it's hard to train. Most modern vision backbones, like [DINOv2](/notes/dinov2-self-supervised-features/), and many segmentation models, like the ones in [panoptic segmentation](/notes/panoptic-segmentation/), are built on this idea.
+A transformer works on a sequence of vectors. An image is a grid of pixels. The Vision Transformer (ViT) connects the two in the simplest way you could think of: cut the image into square patches, turn each patch into one vector, and give that sequence to a normal transformer encoder. Almost nothing image-specific is left in the model. That's both why it's nice and why it's hard to train. Many modern vision backbones, like [DINOv2](/notes/dinov2-self-supervised-features/), and many newer segmentation models are built on this idea.
 
 ## From pixels to tokens: the patch embedding
 

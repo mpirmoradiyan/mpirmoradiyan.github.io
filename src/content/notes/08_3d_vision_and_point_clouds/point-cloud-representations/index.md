@@ -38,7 +38,7 @@ A point cloud is just an $N \times 3$ array of coordinates. Often each point has
 
 So even a simple question like "which points are near this one?" needs a spatial index, such as a k-d tree or one of the grids below.
 
-File formats differ in small ways that can bite you. Plain text (`.xyz`, `.txt`, `.csv`) is easy to read but big and slow. PLY stores points, and optionally faces, as text or binary. LAS/LAZ, the standard for airborne LiDAR, stores coordinates as **scaled integers**: the real value is $x = X \cdot s_x + o_x$, where $X$ is the stored integer, $s_x$ is the scale (for example 0.01 m) and $o_x$ is the offset from the header. Readers usually do this for you, but if you read the raw integer fields you have to apply it yourself. Also, LAS colours are 16-bit, so divide by 65,535, not 255, to get values in $[0, 1]$.
+File formats differ in small ways that can bite you. Plain text (`.xyz`, `.txt`, `.csv`) is easy to read but big and slow. PLY stores points, and optionally faces, as text or binary. LAS/LAZ, the standard for airborne LiDAR, stores coordinates as **scaled integers**: the real value is $x = X \cdot s_x + o_x$, where $X$ is the stored integer, $s_x$ is the scale (for example 0.01 m) and $o_x$ is the offset from the header. Readers usually do this for you, but if you read the raw integer fields you have to apply it yourself. Also, LAS colours are 16-bit, so divide by 65,535, not 255, to get values in $[0, 1]$. (Some files still hold 0–255 values in those 16-bit fields, so I check the maximum first.)
 
 ## Voxel grids
 

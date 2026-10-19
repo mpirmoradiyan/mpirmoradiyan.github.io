@@ -88,7 +88,7 @@ Both give the same answer because $dx \cdot \text{GSD} / h = dx / f_{px}$. There
 
 Two smaller shortcuts are also worth avoiding:
 
-- **Spreading angles evenly across the frame**, for example `np.linspace(-fov/2, fov/2, W)`. On a flat sensor it's the *tangent* of the angle that grows evenly with pixel position, not the angle itself. A quarter of the way from the centre to the edge, the even guess gives 18.4° instead of 20.6°.
+- **Spreading angles evenly across the frame**, for example `np.linspace(-fov/2, fov/2, W)`. On a flat sensor it's the *tangent* of the angle that grows evenly with pixel position, not the angle itself. Halfway from the centre to the edge, the even guess gives 18.4° instead of 20.6°.
 - **Combining the horizontal and vertical angles as $\sqrt{\alpha_x^2 + \alpha_y^2}$.** That only works for small angles. At the corner of this camera it gives 45.4° instead of 42.0°. Combine the pixel offsets first, then take the arctangent.
 
 ## How pixel size changes across the frame

@@ -19,7 +19,7 @@ sources:
 status: draft
 ---
 
-Before YOLO, the best detectors worked in two stages. First they proposed a few thousand candidate regions, then they classified each one. That's accurate but slow, because the network runs many times per image. YOLOv1 (2015) asked a simpler question: can one network look at the whole image once and directly spit out every box and its class? It turned out yes, at 45 frames per second. Almost every real-time detector today still uses the idea it started: a grid of cells, where each cell predicts boxes from the features at its spot.
+Before YOLO, the best detectors worked in two stages. First they proposed a few thousand candidate regions, then they classified each one. That's accurate but slow: R-CNN ran the network once for every region, and even the faster versions still had a separate, slow proposal step. YOLOv1 (2015) asked a simpler question: can one network look at the whole image once and directly spit out every box and its class? It turned out yes, at 45 frames per second. Almost every real-time detector today still uses the idea it started: a grid of cells, where each cell predicts boxes from the features at its spot.
 
 ## The grid idea
 
@@ -66,7 +66,7 @@ print(t.shape)                       # torch.Size([7, 7, 25])
 print(t[..., C].nonzero().tolist())  # [[2, 3], [6, 0]]: cells that own an object
 ```
 
-The target only stores one box per cell, but the prediction has $B = 2$. This confused me at first. During training, whichever predicted box has the higher IoU with the real box becomes the responsible one. Over time the two box slots specialise: one tends to take tall objects, the other wide ones.
+The target only stores one box per cell, but the prediction has $B = 2$. This confused me at first. During training, whichever predicted box has the higher IoU with the real box becomes the responsible one. Over time the two box slots specialise, each getting better at certain sizes and shapes of object.
 
 Look at the `if` line. If two object centres land in the same cell, the second one just gets dropped. That's a real limit of YOLOv1, not a shortcut in my code.
 
@@ -123,7 +123,7 @@ That gives $7 \times 7 \times 2 = 98$ candidates. Low-score boxes are thrown awa
 
 ## What it's good at, and where it struggles
 
-YOLOv1 was very fast, and it made fewer background false positives than R-CNN, because it sees the whole image as context. Its weak spots all come from the coarse grid:
+YOLOv1 was very fast, and it made fewer background false positives than Fast R-CNN, because it sees the whole image as context. Its weak spots all come from the coarse grid:
 
 - **Crowds of small objects.** Each cell can predict at most $B$ boxes and only one class. A flock of birds in one cell mostly gets lost.
 - **Rough box positions.** Boxes are predicted from a 7×7 grid after a lot of downsampling, so they're less precise than two-stage detectors.

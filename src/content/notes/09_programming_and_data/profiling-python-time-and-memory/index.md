@@ -24,11 +24,11 @@ sources:
 status: draft
 ---
 
-When I guess where my code is slow, I'm usually wrong. A profiler tells you which function, and then which line, is eating the time. A memory measurement tells you which object is big. These are the tools I use for both, starting with what's built into Python, plus the traps that can make a measurement lie. All the numbers below come from Python 3.13 on a 64-bit Mac.
+Here's something I learned the hard way: when I guess where my code is slow, I'm usually wrong. I'd "optimize" a function, and nothing changed, because the time was going somewhere else. So now I measure first. A profiler tells you which function, and then which line, is eating the time. A memory measurement tells you which object is big. Below are the tools I use for both, starting with what's built into Python, plus the traps that can make a measurement lie. All the numbers come from Python 3.13 on a 64-bit Mac.
 
 ## Step 1: which function? cProfile
 
-`cProfile` comes with Python. It records every function call and how long it took. Run a whole script under it and sort by cumulative time:
+The first question is "which function?". `cProfile` comes with Python, so there's nothing to install. It records every function call and how long it took. Run a whole script under it and sort by cumulative time:
 
 ```bash
 python -m cProfile -s cumulative my_script.py | head -20
@@ -61,7 +61,7 @@ The top of the cProfile report (trimmed):
 ```text
 4009199 function calls in 1.532 seconds
 ncalls  tottime  cumtime  filename:lineno(function)
-     1    0.001    1.528  slow.py:10(mean_nearest)
+     1    0.001    1.528  slow.py:9(mean_nearest)
   2000    0.001    1.527  slow.py:6(nearest_distance)
   2000    0.413    1.527  {built-in method builtins.min}
 4000000   1.114    1.114  slow.py:7(<genexpr>)
@@ -76,7 +76,7 @@ Two practical notes:
 
 ## Step 2: which line? line_profiler
 
-cProfile works per function. When one function is long, you want times per line. The `line_profiler` package does that for the functions you mark with `@profile`:
+cProfile works per function. But what if the slow function is long? Then you want times per line. The `line_profiler` package does that for the functions you mark with `@profile`:
 
 ```bash
 pip install line_profiler
@@ -84,11 +84,11 @@ kernprof -l my_script.py               # runs the script, writes my_script.py.lp
 python -m line_profiler my_script.py.lprof
 ```
 
-With `@profile` on `mean_nearest`, the report shows that the single line `total += nearest_distance(p, points)` takes 100% of the time: 2,000 hits at about 0.95 ms each. Line profiling has much more overhead than cProfile (here the run took 1.9 s instead of 1.5 s), so only use it on functions cProfile has already pointed at. And take the decorators off afterwards, or the script will crash with a `NameError` when you run it without `kernprof`.
+With `@profile` on `mean_nearest`, the report shows that the single line `total += nearest_distance(p, points)` takes 100% of the time: 2,000 hits at about 0.95 ms each. Line profiling has much more overhead than cProfile (here the run took 1.9 s instead of 1.5 s), so only use it on functions cProfile has already pointed at. One gotcha: `kernprof` injects `profile` for you, so if you run the script normally with the bare `@profile` still on, it crashes with a `NameError`. Either take the decorators off afterwards, or (in recent line_profiler versions, 4.1 and up) write `from line_profiler import profile` at the top; that decorator does nothing unless you run under `kernprof` or set `LINE_PROFILE=1`.
 
 ## Step 3: did my fix help? timeit
 
-Once you know the hot spot, try a faster version and compare the two with `timeit`. It runs a statement many times and avoids the usual timing mistakes. Take the **minimum** over several repeats. The way I think about it: the fastest run is the one that was least disturbed by other stuff happening on the computer.
+Once you know the hot spot, you try a faster version. But did it really help? Compare the two with `timeit`. It runs a statement many times and avoids the usual timing mistakes. Take the **minimum** over several repeats. The way I think about it: the fastest run is the one that was least disturbed by other stuff happening on the computer.
 
 ```python
 import timeit
@@ -109,7 +109,7 @@ The NumPy version is about 15 times faster for one query point. (For the full ne
 
 ## Measuring memory: sys.getsizeof only looks at the surface
 
-`sys.getsizeof(obj)` gives the size in bytes of the object itself. My first experiments printed these:
+Memory was the next surprise. `sys.getsizeof(obj)` gives the size in bytes of the object itself. My first experiments printed these:
 
 | Object | `sys.getsizeof` (bytes) |
 |---|---|
@@ -126,7 +126,7 @@ The NumPy version is about 15 times faster for one query point. (For the full ne
 
 Everything in Python is an object with a header (a reference count and a pointer to its type), so even the number 1 takes 28 bytes. The exact numbers change between Python versions: with the older Python I used in 2023, `"1"` was 50 bytes and `{1: 1}` was 232.
 
-The trap is that **for containers, `getsizeof` only counts the container**, not the things inside it. A list stores 8-byte pointers to its elements. So `list(range(10**6))` reports 8 MB, and that's just the array of pointers. A list of three strings with 1,000 characters each reports only 80 bytes. To get the real size you have to follow the references:
+The trap is that **for containers, `getsizeof` only counts the container**, not the things inside it. A list stores 8-byte pointers to its elements. So `list(range(10**6))` reports 8 MB, and that's just the array of pointers. A list of three strings with 1,000 characters each reports only about 80 bytes. To get the real size you have to follow the references:
 
 ```python
 import sys
@@ -154,7 +154,7 @@ The dictionary on its own is 42 MB. With its million key objects it's 98 MB. The
 
 A NumPy array keeps its numbers in one raw buffer, not as Python objects. `a.nbytes` gives the size of that buffer. For an array that owns its data, `getsizeof` is `nbytes` plus a header of about 112 bytes (`np.zeros(10**6)`: 8,000,112 vs 8,000,000). For a **view**, like `a[::2]`, `getsizeof` says only 112 bytes because the view doesn't own the buffer, while `nbytes` says 4,000,000, the size of the data it points to. Neither number alone tells you whether memory is shared, which confused me for a while.
 
-For pandas, use `df.memory_usage(deep=True)`. Without `deep=True`, a column of strings gets counted as 8-byte pointers. For a 1,000-row frame with one integer column and one short string column, the shallow count was 16 kB and the deep count 62 kB.
+For pandas, use `df.memory_usage(deep=True)`. Without `deep=True`, a column of strings gets counted as 8-byte pointers. For a 1,000-row frame with one integer column and one short string column, the shallow count was about 16 kB and the deep count about 61 kB.
 
 ## Memory over time: tracemalloc
 
@@ -170,11 +170,11 @@ del squares
 
 tracemalloc.reset_peak()
 total = sum(i * i for i in range(1_000_000))       # lazy: one value at a time
-print(tracemalloc.get_traced_memory())             # peak about 1 kB
+print(tracemalloc.get_traced_memory())             # peak under 1 kB
 tracemalloc.stop()
 ```
 
-The list version needs 40 MB at its peak. The generator version needs about a kilobyte, because each square is made, added and thrown away. It's the same idea as `range(10**6)` taking only 48 bytes: a `range` stores just start, stop and step and makes numbers when you ask for them. `tracemalloc.take_snapshot()` can also list the source lines that allocated the most memory, so it's basically cProfile for memory. It only sees allocations that go through Python's own allocator, so memory used by some C libraries may be missing. For a whole-process view, look at the resident set size (RSS, the memory the process really holds) with `psutil` or a tool like `memray`.
+The list version needs 40 MB at its peak. The generator version needs less than a kilobyte, because each square is made, added and thrown away. It's the same idea as `range(10**6)` taking only 48 bytes: a `range` stores just start, stop and step and makes numbers when you ask for them. `tracemalloc.take_snapshot()` can also list the source lines that allocated the most memory, so it's basically cProfile for memory. It only sees allocations that go through Python's own allocator, so memory used by some C libraries may be missing. For a whole-process view, look at the resident set size (RSS, the memory the process really holds) with `psutil` or a tool like `memray`.
 
 ## Key takeaways
 

@@ -26,7 +26,7 @@ sources:
 status: draft
 ---
 
-PCA and ICA both turn a set of measured variables into a few new ones, built as linear combinations of the old ones. In a lab on near-infrared spectra I ran both and got loading plots that looked almost the same, and I concluded they "convey the same information". That's not really right. The similarity came from how ICA is computed, not from the two methods wanting the same thing.
+In a lab on near-infrared spectra I ran PCA and then ICA. Both turn many measured variables into a few new ones, each a linear combination of the old ones. My two loading plots looked almost the same, so I happily wrote that they "convey the same information". Later I understood that was wrong. The plots looked alike because of how ICA is computed, not because the two methods want the same thing. Here's how I untangled it.
 
 ## What PCA looks for
 
@@ -42,7 +42,7 @@ where the columns of $U$ are the loadings and the diagonal of $\Lambda$ holds th
 
 ICA assumes the data are a mix of hidden sources: $x = A s$, where the entries of $s$ are statistically **independent** and $A$ is an unknown mixing matrix. The goal is an unmixing matrix $W$ with $\hat s = W x$. The classic picture is two microphones in a room with two speakers, where each microphone records a different blend.
 
-Independence is much stronger than "uncorrelated". It says the joint density factorizes, $p(s_1, s_2) = p(s_1)\,p(s_2)$, which involves all higher moments, not just covariances. And there's a catch: if the sources are Gaussian, ICA can't work, because any rotation of independent Gaussians is still independent Gaussians. ICA needs non-Gaussian sources, and it finds them by searching for the least Gaussian directions (fastICA uses an approximation of negentropy; kurtosis is a simpler measure).
+Independence is much stronger than "uncorrelated". It says the joint density factorizes, $p(s_1, s_2) = p(s_1)\,p(s_2)$, which involves all higher moments, not just covariances. And there's a catch: if the sources are Gaussian, ICA can't work, because any rotation of independent Gaussians (with equal variance) is still independent Gaussians. To be exact, at most one source may be Gaussian. ICA needs non-Gaussian sources, and it finds them by searching for the least Gaussian directions (fastICA uses an approximation of negentropy; kurtosis is a simpler measure).
 
 ## Why ICA starts with PCA
 

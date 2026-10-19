@@ -31,7 +31,7 @@ sources:
 status: draft
 ---
 
-A GPT is a stack of identical transformer blocks on top of an embedding layer, trained to guess the next token. That one sentence hides a handful of design choices, and I wanted to see what each one actually does. So I started from the simplest possible language model and added the pieces one at a time, checking the validation loss after each change. The data is Tiny Shakespeare, about 1.1 million characters of plays, handled one character at a time with a vocabulary of 65 symbols.
+"A GPT is a stack of identical transformer blocks on top of an embedding layer, trained to guess the next token." That one sentence sounds simple, but it hides a handful of design choices, and I wanted to see what each one actually does. So I started from the simplest possible language model and added the pieces one at a time, checking the validation loss after each change. The data is Tiny Shakespeare, about 1.1 million characters of plays, handled one character at a time with a vocabulary of 65 symbols.
 
 ## The setup
 
@@ -43,7 +43,7 @@ A GPT is a stack of identical transformer blocks on top of an embedding layer, t
 
 ## Step 0: the bigram baseline
 
-The simplest model is one embedding table of size (65, 65). Row $i$ holds the logits (raw scores) for the character that comes after character $i$. It ignores everything except the current character.
+The simplest model is one embedding table of size (65, 65). Row $i$ holds the logits (raw scores) for the character that comes after character $i$. It ignores everything except the current character. (The [bigram language model note](/notes/bigram-language-model/) goes through this model in detail.)
 
 ```python
 class Bigram(nn.Module):
@@ -80,7 +80,7 @@ Steps 1 to 4 below all use `block_size = 8`, embedding size 32, batch size 32, l
 | 3 | 3 transformer blocks: attention + feed-forward, with residual connections | 2.11 |
 | 4 | layer normalization before each sub-layer, and a final layer norm | 2.06 |
 
-**Step 1: let the tokens talk.** Each position gets a token embedding plus a learned position embedding, then one head of [causal self-attention](/notes/causal-attention/), then a linear layer to get logits. Now a character can use the seven characters before it, not just one.
+**Step 1: let the tokens talk.** The bigram's problem is that each character is blind to everything before it. So each position gets a token embedding plus a learned position embedding, then one head of [self-attention](/notes/self-attention/) with a causal mask ([causal attention](/notes/causal-attention/)), then a linear layer to get logits. Now a character can use the seven characters before it, not just one.
 
 **Step 2: several heads.** [Multi-head attention](/notes/multi-head-attention/) lets different heads keep track of different kinds of relationships. The total width stays 32.
 
@@ -96,7 +96,7 @@ class FeedForward(nn.Module):
         return self.net(x)
 ```
 
-Stacking several blocks makes the network deep, and deep networks are hard to train. **Residual connections** fix this. Each sub-layer adds its output to its input, `x = x + sublayer(x)`, instead of replacing it. In backprop, the addition passes the gradient straight through to earlier layers, so there's always a clean path from the loss back to the first block. At the start the sub-layers add very little, so the network acts almost like a shallow one, and then the blocks slowly learn to add useful corrections. This step gave the biggest single jump.
+Stacking several blocks makes the network deep, and deep networks are hard to train. **Residual connections** fix this. Each sub-layer adds its output to its input, `x = x + sublayer(x)`, instead of replacing it. In backprop, the addition passes the gradient straight through to earlier layers, so there's always a clean path from the loss back to the first block. If the sub-layers start out adding only small amounts, the network acts almost like a shallow one at first, and the blocks slowly learn to add useful corrections. This step (blocks with feed-forward layers and residual connections together) gave the biggest single jump.
 
 **Step 4: layer normalization.** [Batch normalization](/notes/batch-normalization/) normalizes each feature across the batch. **Layer normalization** flips that around: it normalizes each token's vector across its own features:
 
@@ -105,7 +105,7 @@ $$
 \qquad \mu = \frac{1}{C}\sum_{j=1}^{C} x_j,\quad \sigma^2 = \frac{1}{C}\sum_{j=1}^{C}(x_j - \mu)^2
 $$
 
-Here $x$ is one token's vector of $C$ features, $\gamma$ and $\beta$ are a learned gain and shift, and $\epsilon$ is a small constant. Since the statistics come from a single token, it doesn't depend on the other examples in the batch, there are no running averages, and it behaves the same in training and inference. That fits sequences of different lengths nicely. I checked this on a toy (32, 100) tensor: after layer norm, each row had mean 0 and standard deviation 1, but the columns didn't.
+Here $x$ is one token's vector of $C$ features, $\gamma$ and $\beta$ are a learned gain and shift, and $\epsilon$ is a small constant. Since the statistics come from a single token, it doesn't depend on the other examples in the batch, there are no running averages, and it behaves the same in training and inference. I checked this on a toy (32, 100) tensor: after layer norm, each row had mean 0 and standard deviation 1, but the columns didn't.
 
 The original transformer put layer norm *after* each residual addition. GPT-2 and later models put it *before* each sub-layer ("pre-norm"), which trains more smoothly:
 
@@ -147,7 +147,7 @@ This model is a **decoder-only** transformer, like GPT. It has no encoder and no
 
 - A GPT is token + position embeddings, a stack of blocks (masked multi-head attention and a feed-forward MLP), a final layer norm and a linear head.
 - Attention moves information between positions. The feed-forward layer works on it inside each position.
-- Residual connections give gradients a direct path through all the layers, and they were the biggest single gain here.
+- Residual connections give gradients a direct path through all the layers. Adding blocks with feed-forward layers and residuals was the biggest single gain here.
 - Layer norm normalizes each token over its own features, so it doesn't depend on the batch. GPT-style models put it before each sub-layer.
 - Keep an eye on the validation loss: the 10.8M-parameter model was best at step 3,000 (1.48) and overfit after that.
 

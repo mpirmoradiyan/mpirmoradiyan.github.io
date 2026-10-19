@@ -60,7 +60,7 @@ val_flow = datagen.flow(X_train, Y_train, batch_size=64, subset="validation")
 # model.fit(train_flow, validation_data=val_flow, epochs=200)
 ```
 
-(The current Keras way is preprocessing layers like `RandomRotation` and `RandomFlip` inside the model, but the idea is the same.)
+(The current Keras way is preprocessing layers like `RandomRotation` and `RandomFlip` inside the model, but the idea is the same.) These are all geometric changes. Changing colours instead of positions is in the [photometric colour augmentation note](/notes/photometric-colour-augmentation/).
 
 With this, trained for 200 epochs, the results were:
 
@@ -79,7 +79,7 @@ The rule I took away: **augment with transformations that keep the label and tha
 
 - If test images can come in any orientation (satellite or microscope images), use rotations over the full range, including 90-degree steps.
 - If they're always upright (most phone photos), a vertical flip mostly adds unrealistic upside-down cars and boats. It may cost accuracy on the upright test set for no benefit. In hindsight our `vertical_flip=True` was a questionable choice for CIFAR-10.
-- Some flips change the label, like digits 6 and 9, or left/right arrows.
+- Some transformations change the label. A 180-degree turn makes a 6 look like a 9, and a horizontal flip turns a left arrow into a right arrow.
 
 Augmentation isn't the only option. Test-time augmentation averages predictions over several transformed copies of each test image. Rotation-equivariant architectures (group-equivariant CNNs) build rotations into the filters, the same way ordinary convolution builds in translations.
 

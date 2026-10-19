@@ -25,7 +25,7 @@ sources:
 status: draft
 ---
 
-Detection and segmentation models predict objects one at a time, so neighbouring polygons often overlap: two crowns claiming the same leaves, two buildings sharing a wall. Before you can count, measure or export the polygons, every overlap needs an owner. Step one is finding which polygons overlap at all. With tens of thousands of polygons, the way you search decides whether that takes milliseconds or minutes. These notes cover searching with a spatial index and two ways to split what you find. (Fixing invalid polygons first is in [polygon validity and shape metrics](/notes/polygon-validity-and-shape-metrics/).)
+Detection and segmentation models predict objects one at a time, so neighbouring polygons often overlap: two crowns claiming the same leaves, two buildings sharing a wall. Before you can count, measure or export the polygons, every overlap needs an owner. Step one is finding which polygons overlap at all. The obvious double loop works fine for a few hundred polygons, but with tens of thousands the way you search decides whether this takes milliseconds or minutes. So here's how a spatial index makes the search fast, and two ways to split what you find. (Fixing invalid polygons first is in [polygon validity and shape metrics](/notes/polygon-validity-and-shape-metrics/).)
 
 ## Why checking every pair is too slow
 

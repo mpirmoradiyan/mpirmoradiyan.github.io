@@ -33,7 +33,7 @@ If you train a model on images from one camera, one season and one time of day, 
 
 Augmentations come in two families:
 
-- **Geometric**: flips, 90° rotations, crops, scaling, elastic or grid distortion. These move pixels around, so the label has to move with them.
+- **Geometric**: flips, 90° rotations, crops, scaling, elastic or grid distortion. These move pixels around, so the label has to move with them. (What rotations and flips can and can't teach a CNN is in the [rotation and geometric augmentation note](/notes/cnn-rotation-and-geometric-augmentation/).)
 - **Photometric**: brightness, contrast, gamma, hue, saturation, colour jitter, PCA colour noise, blur, sharpening, noise. These change pixel values where they are. The label stays put.
 
 This split matters most for dense tasks like segmentation (one label per pixel). I come back to that below.

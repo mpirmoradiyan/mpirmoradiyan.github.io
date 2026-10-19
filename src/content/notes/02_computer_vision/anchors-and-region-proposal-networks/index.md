@@ -278,7 +278,7 @@ The second stage (the "RoI heads" in Fast R-CNN and Mask R-CNN; RoI means region
 
 How you cut out that feature grid matters a lot if you want precise boxes and masks:
 
-- **RoIPool** (Fast R-CNN) rounds the box to whole feature cells, splits it into bins, and rounds again. On a stride-16 map, one rounding step can move the box by up to 15 input pixels.
+- **RoIPool** (Fast R-CNN) rounds the box to whole feature cells, splits it into bins, and rounds again. On a stride-16 map, one rounding step can move a box edge by up to half a cell, which is 8 input pixels, and the bin rounding adds more.
 - **RoIAlign** (Mask R-CNN) keeps the fractional coordinates and samples each bin with bilinear interpolation (a weighted average of the four nearest cells). That removes the misalignment, and in the Mask R-CNN paper it clearly improved mask accuracy.
 
 ```python

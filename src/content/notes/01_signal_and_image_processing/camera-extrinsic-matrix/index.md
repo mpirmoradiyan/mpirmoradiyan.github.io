@@ -102,7 +102,7 @@ $$
 X_{\text{cam}} = E\begin{bmatrix}X_w\\1\end{bmatrix} = R_c^\top (X_w - C).
 $$
 
-So basically: subtract the camera centre, then write the result in the camera's axes. One thing that tripped me up: $t$ is **not** the camera position. The camera position is $C = -R^\top t$. Mixing these two up seems to be one of the most common bugs in camera code.
+So basically: subtract the camera centre, then write the result in the camera's axes. One thing that tripped me up: $t$ is **not** the camera position. The camera position is $C = -R^\top t$. Mixing these two up is an easy bug to make in camera code.
 
 ## A worked example
 

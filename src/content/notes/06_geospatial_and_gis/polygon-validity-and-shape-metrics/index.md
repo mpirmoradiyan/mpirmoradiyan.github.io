@@ -20,7 +20,7 @@ sources:
 status: draft
 ---
 
-When you turn a segmentation or detection model's output into map polygons, a few shapes always come out broken: the outline crosses itself, and GIS tools refuse it. And once the polygons are valid, you often want to filter them by shape, for example to drop long thin slivers from a class that should be round. These are my notes on both steps with Shapely.
+When you turn a segmentation or detection model's output into map polygons, a few shapes always come out broken: the outline crosses itself, and GIS tools refuse it. And once the polygons are valid, you often want to filter them by shape, for example to drop long thin slivers from a class that should be round. These are my notes on both steps with Shapely. Getting the polygons out of a mask in the first place is in [instance masks to polygons](/notes/instance-masks-to-polygons/), sorting out overlapping neighbours is in [overlapping polygons with an STRtree](/notes/polygon-overlaps-with-strtree/), and how area itself is computed is in [the shoelace formula](/notes/shoelace-formula-polygon-area/).
 
 ## What makes a polygon invalid
 
@@ -67,7 +67,7 @@ $$
 e = \sqrt{1 - \left(\tfrac{b}{a}\right)^2}
 $$
 
-It's 0 for a square-ish footprint and close to 1 for a long, thin one. This is really the ellipse eccentricity formula applied to the bounding rectangle, so it's an approximation, but a fast one that rarely misbehaves.
+It's 0 when the bounding rectangle is a square and close to 1 for a long, thin one. This is really the ellipse eccentricity formula applied to the bounding rectangle, so it's only an approximation, but it's fast and simple.
 
 **Circularity** (the Polsby–Popper score) compares the area $A$ with the perimeter $P$:
 
@@ -99,7 +99,7 @@ Here's what they give for a few simple shapes:
 | Circle | 0.00 | 1.00 | 1.00 |
 | Square | 0.00 | 0.79 | 1.00 |
 | Rectangle 6 × 1 | 0.99 | 0.38 | 1.00 |
-| L-shape | 0.00 | 0.44 | 0.71 |
+| L-shape (3 × 3, arms 1 wide) | 0.00 | 0.44 | 0.71 |
 
 The measures fill in each other's gaps. The L-shape fits in a square bounding rectangle, so its eccentricity is 0, but solidity and circularity show that it isn't compact.
 
@@ -116,7 +116,7 @@ gdf["circularity"]  = gdf.geometry.apply(circularity)
 gdf["solidity"]     = gdf.geometry.apply(solidity)
 ```
 
-Things that are naturally round, like tree crowns seen from above, should have low eccentricity and high solidity. A crown polygon with eccentricity above 0.95 is almost always an artefact, like two crowns merged into a strip. Things that are naturally long, like fallen trunks, need their own thresholds, so filter per class rather than across everything.
+Things that are naturally round, like tree crowns seen from above, should have low eccentricity and high solidity. A crown polygon with eccentricity above 0.95 (short side less than a third of the long side) is suspicious, and is often an artefact like two crowns merged into a strip. Things that are naturally long, like fallen trunks, need their own thresholds, so filter per class rather than across everything.
 
 ## Key takeaways
 

@@ -97,7 +97,7 @@ For how QR is used to fit a regression and get standard errors, see [least squar
 ## Resources
 
 - 732A90 Computational Statistics, Linköping University, Lab 1 (2020).
-- Lloyd N. Trefethen and David Bau III, *Numerical Linear Algebra*, SIAM, 1997, Lectures 11-12 (least squares) and 18-19 (conditioning of least squares).
+- Lloyd N. Trefethen and David Bau III, *Numerical Linear Algebra*, SIAM, 1997, Lecture 11 (least squares problems), Lecture 12 (conditioning and condition numbers) and Lectures 18-19 (conditioning and stability of least squares).
 - Gene H. Golub and Charles F. Van Loan, *Matrix Computations*, 4th ed., Johns Hopkins University Press, 2013, Chapter 5.
 - Arthur E. Hoerl and Robert W. Kennard, "Ridge regression: biased estimation for nonorthogonal problems", *Technometrics* 12(1), 1970.
 - R documentation, `kappa()`: https://stat.ethz.ch/R-manual/R-devel/library/base/html/kappa.html

@@ -25,7 +25,7 @@ sources:
 status: draft
 ---
 
-Association rules come from shopping baskets: "people who buy bread and butter often buy milk too". But the same idea works on any table once you treat every attribute value as an "item". In two data mining labs we used rules for two jobs: describing clusters found by k-means, and finding the pattern behind a class that clustering couldn't find at all. The second one taught me the most.
+I first met association rules as a shopping-basket thing: "people who buy bread and butter often buy milk too". Then in two data mining labs we used them on ordinary tables, and that surprised me. The trick is simple: treat every attribute value as an "item". We used rules for two jobs. First, to describe clusters found by k-means in plain words. Second, to find the pattern behind a class that clustering couldn't find at all. That second one taught me the most.
 
 ## Items, itemsets and rules
 
@@ -66,7 +66,7 @@ $$
 \text{class} = 1 \iff (a_1 = a_2) \;\text{or}\; (a_5 = 1)
 $$
 
-We clustered it with k-means (2 and 3 clusters), EM and a density-based clusterer, and none of them matched the classes. With Apriori (minimum support 0.05), the top rules for class 1 were
+We clustered it with k-means (2 and 3 clusters), EM and a density-based clusterer. None of them matched the classes. That was frustrating, because the rule is so simple. Then we tried Apriori. With Apriori (minimum support 0.05), the top rules for class 1 were
 
 - `attribute#5=1  29 ==> class=1  29  conf:(1)`
 - `attribute#1=3 attribute#2=3  17 ==> class=1  17  conf:(1)`

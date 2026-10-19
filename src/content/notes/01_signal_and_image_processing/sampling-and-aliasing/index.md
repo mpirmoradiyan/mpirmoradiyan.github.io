@@ -81,7 +81,7 @@ so one shifted sinc per sample, each scaled by the sample value. Real resizing c
 
 ## Aliasing in images, and the anti-aliasing filter
 
-Images are 2D signals, so the same rule applies along each axis. Downsampling by keeping every $k$-th pixel means sampling $k$ times more slowly, and any detail finer than the new Nyquist limit aliases. The fix is to remove those frequencies **before** you drop pixels, with a low-pass filter called the **anti-aliasing filter**. A Gaussian or a binomial kernel like $[1, 4, 6, 4, 1]/16$ is the usual pick.
+Images are 2D signals, so the same rule applies along each axis. Downsampling by keeping every $k$-th pixel means sampling $k$ times more slowly, and any detail finer than the new Nyquist limit aliases. The fix is to remove those frequencies **before** you drop pixels, with a low-pass filter called the **anti-aliasing filter**. A Gaussian or a binomial kernel like $[1, 4, 6, 4, 1]/16$ is the usual pick (see [Linear filters and the Gaussian blur](/notes/linear-filters-and-gaussian-blur/)).
 
 ![A zone plate, the same image subsampled by 4, and the image blurred with a Gaussian before subsampling by 4](fig-zone-plate-aliasing.png)
 

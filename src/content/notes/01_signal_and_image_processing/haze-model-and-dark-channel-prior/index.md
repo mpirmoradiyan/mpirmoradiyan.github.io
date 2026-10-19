@@ -93,7 +93,7 @@ $$
 a = \frac{\operatorname{cov}(G, p)}{\operatorname{var}(G) + \epsilon}, \qquad b = \bar p - a\,\bar G,
 $$
 
-where $p$ is the input you want to filter (the rough transmission) and $\epsilon$ controls how much smoothing happens in flat areas. The coefficients are then averaged over overlapping windows. It's all built from box filters, so the cost doesn't depend on the window size. Where the guide has an edge, $\operatorname{var}(G)$ is large, $a \approx 1$, and the edge gets copied into $t$. In flat areas $a \approx 0$ and $t$ just gets smoothed.
+where $p$ is the input you want to filter (the rough transmission) and $\epsilon$ controls how much smoothing happens in flat areas. The coefficients are then averaged over overlapping windows. It's all built from box filters, so the cost doesn't depend on the window size. Where the guide has a strong edge, $\operatorname{var}(G) \gg \epsilon$, so $a$ is close to the local slope $\operatorname{cov}(G, p)/\operatorname{var}(G)$ and the edge gets copied into $t$. In flat areas $\operatorname{var}(G) \ll \epsilon$, so $a \approx 0$, $b \approx \bar p$, and $t$ just gets smoothed. (In the code below, `r` is the box width in pixels; in the paper $r$ is the window radius.)
 
 ## The whole method in a few lines
 

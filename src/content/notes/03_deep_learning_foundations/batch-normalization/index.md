@@ -31,7 +31,7 @@ sources:
 status: draft
 ---
 
-Deep networks get hard to train when the numbers flowing through them drift to huge values. Activations like $\tanh$ then get stuck at their limits and stop passing gradient back, and you have to use a tiny learning rate so things don't blow up. Batch normalization (BatchNorm) keeps the scale of each layer's inputs under control during training. It became a standard layer because networks train faster with it, you can use bigger learning rates, and you worry less about how the weights were initialized.
+BatchNorm shows up in almost every network, and it's easy to add it without knowing why. What made it click for me was looking at the numbers inside a tiny $\tanh$ network with random weights: almost every activation was stuck at $-1$ or $+1$. Stuck activations pass almost no gradient back, so the network barely learns, and you end up using a tiny learning rate so nothing blows up. Batch normalization keeps the scale of each layer's inputs under control during training. That's why networks with it train faster, put up with bigger learning rates, and care less about how the weights were initialized.
 
 ## The problem: activations that drift and get stuck
 
@@ -118,11 +118,11 @@ Why it works is less clear than the original paper made it sound. Santurkar et a
 
 ## Limits and alternatives
 
-BatchNorm needs fairly large batches. With very small batches, $\mu_B$ and $\sigma_B^2$ are noisy and training and test behaviour drift apart. It's also awkward for sequence models with different lengths. The common alternatives normalize over other axes and behave the same in training and at test time:
+BatchNorm needs fairly large batches. With very small batches, $\mu_B$ and $\sigma_B^2$ are noisy and training and test behaviour drift apart. It's also awkward for sequence models with different lengths. The first two alternatives below normalize over other axes, so they behave the same in training and at test time:
 
 - **Layer Normalization**: normalizes over the features of each single example. It's the standard choice in Transformers.
 - **Group Normalization**: normalizes over groups of channels per example. It's popular in detection and segmentation with small batches.
-- **Batch Renormalization**: keeps the batch axis but nudges towards the running statistics.
+- **Batch Renormalization**: keeps the batch axis, but adds a correction towards the running statistics so training and test behaviour match better with small batches.
 
 ## Key takeaways
 

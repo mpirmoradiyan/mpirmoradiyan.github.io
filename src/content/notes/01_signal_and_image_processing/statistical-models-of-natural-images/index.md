@@ -23,7 +23,7 @@ Natural images are a tiny, very structured corner of all possible pixel arrays. 
 
 ## Model 1: every pixel on its own
 
-The simplest model says each pixel is drawn independently from the same distribution. For an 8-bit grey image that distribution has 256 parameters:
+The simplest model says each pixel is drawn independently from the same distribution. For an 8-bit grey image that distribution has 256 parameters (255 free ones, since they must add up to 1):
 
 $$
 p_\theta(\ell[n, m] = k) = \theta_k, \qquad k = 0, \dots, 255, \qquad \sum_k \theta_k = 1.
@@ -62,7 +62,7 @@ $$
 |\mathcal{L}(u, v)| \approx \frac{A}{w^{\alpha}}, \qquad \text{so the power } |\mathcal{L}|^2 \approx \frac{A^2}{w^{2\alpha}},
 $$
 
-with $\alpha$ close to 1 for typical scenes. On a log-log plot that's a straight line, and the right panel shows exactly that. For my two test images the fitted power slopes were about $-2.8$, so $\alpha \approx 1.4$. Values between 1 and 1.5 are common, depending on the scene and how you measure the spectrum. A spectrum like this has no favourite scale: zoom in on a natural scene and you get roughly the same statistics. That's why it's called **scale invariant**.
+with $\alpha$ close to 1 for typical scenes. On a log-log plot that's a straight line, and the right panel shows exactly that. For my two test images the fitted power slopes were about $-2.8$, so $\alpha \approx 1.4$. Published values spread around 1 (roughly 0.8 to 1.5), depending on the scene and how you measure the spectrum. A spectrum like this has no favourite scale: zoom in on a natural scene and you get roughly the same statistics. That's why it's called **scale invariant**.
 
 (In my notebook I first computed "power" as the square of the *log* magnitude. That's wrong: the power spectrum is the square of the magnitude itself. Only take the log for plotting.)
 

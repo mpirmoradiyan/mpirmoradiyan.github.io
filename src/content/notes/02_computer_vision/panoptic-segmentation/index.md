@@ -35,13 +35,13 @@ sources:
 status: draft
 ---
 
-Semantic segmentation tells you a pixel is "person", but not *which* person. Instance segmentation separates each person, but ignores the sky, the road and the grass. Panoptic segmentation wants both at once: every pixel gets a class, and pixels that belong to countable objects also get an instance ID. Of the three tasks, it's the closest to a full description of a scene, which is why people care about it for driving, mapping and robotics.
+Look at a street photo and ask two questions about every pixel: what is it, and which object does it belong to? Semantic segmentation only answers the first one. It tells you a pixel is "person", but not *which* person. Instance segmentation answers the second one for people and cars, but it ignores the sky, the road and the grass. Panoptic segmentation asks for both at once: every pixel gets a class, and pixels that belong to countable objects also get an instance ID. Of the three tasks, it's the closest to a full description of a scene, which is why people care about it for driving, mapping and robotics.
 
 ## Things and stuff
 
 Kirillov et al. (2019) split classes into two kinds:
 
-- **Things** are objects you can count, with a clear shape: person, car, bicycle, tree. Each one gets its own instance ID.
+- **Things** are objects you can count, with a clear shape: person, car, bicycle, dog. Each one gets its own instance ID.
 - **Stuff** is shapeless regions you can't really count: sky, grass, road, water. All pixels of one stuff class share one segment.
 
 The output is one map where each pixel has a pair $(c, z)$: class $c$ and instance ID $z$. For stuff, $z$ isn't used. A handy trick packs the pair into a single integer:

@@ -27,7 +27,7 @@ sources:
 status: draft
 ---
 
-A regression model usually gets judged by one number, often RMSE. But that number is an average over every prediction, so it hides *where* the model fails. A model can have a nice RMSE and still be badly biased for large values, or for one group of users, or have errors that grow as the target gets bigger. Error analysis is just the habit of breaking the error apart until you know who gets the bad predictions and why.
+I used to judge a regression model by one number, usually RMSE. Then it hit me that this number is an average over every prediction, so it hides *where* the model fails. A model can have a nice RMSE and still be badly biased for large values, or for one group of users, or have errors that grow as the target gets bigger. Error analysis is just the habit of breaking the error apart until you know who gets the bad predictions and why.
 
 ## The usual metrics, and what each one hides
 
@@ -41,9 +41,9 @@ I'll write the error of prediction $i$ as $e_i = \hat y_i - y_i$, where $\hat y_
 | MAPE | $\frac{100}{n}\sum \lvert e_i / y_i\rvert$ | Relative error, unit-free | Explodes near $y=0$; dominated by small targets |
 | $R^2$ | $1 - \frac{\sum e_i^2}{\sum (y_i - \bar y)^2}$ | Error relative to predicting the mean | Depends on how spread out the test set is |
 
-A few of these need more explanation.
+A few of these surprised me, so here's more on them.
 
-**MAE versus RMSE.** This one surprised me: the constant that minimizes MAE is the median, while the one that minimizes squared error is the mean (Gneiting 2011). So the two metrics are actually asking for different predictions. RMSE is always at least as big as MAE. If RMSE/MAE is well above about 1.25 (the value you get for normally distributed errors), that hints at heavy tails: a small number of big misses.
+**MAE versus RMSE.** The constant that minimizes MAE is the median, while the one that minimizes squared error is the mean (Gneiting 2011). So the two metrics are actually asking for different predictions. RMSE is always at least as big as MAE. If RMSE/MAE is well above about 1.25 (the value you get for normally distributed errors), that hints at heavy tails: a small number of big misses.
 
 **MAPE is lopsided.** If the truth is 10, predicting 0 costs 100%, but predicting 30 costs 200%, and over-predicting has no upper limit. So models tuned for MAPE lean towards predicting too low. Small true values also get huge weight. Hyndman and Koehler (2006) go through these problems and suggest scaled alternatives.
 
@@ -53,7 +53,7 @@ A few of these need more explanation.
 
 ## A synthetic example
 
-The data below has *multiplicative* noise (bigger targets, bigger spread) and five groups, and one of them (E) runs higher than the rest. The model is a plain linear fit that doesn't know about the groups.
+To see this for real, I made some fake data. It has *multiplicative* noise (bigger targets, bigger spread) and five groups, and one of them (E) runs higher than the rest. The model is a plain linear fit that doesn't know about the groups.
 
 ```python
 import numpy as np

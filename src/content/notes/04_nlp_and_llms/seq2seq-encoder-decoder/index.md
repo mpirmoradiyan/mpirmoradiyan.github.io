@@ -27,11 +27,11 @@ sources:
 status: draft
 ---
 
-Lots of language tasks turn one sequence into another sequence of a different length: translation, summarization, question answering. A plain language model doesn't quite fit, because the output has to depend on a separate input. The sequence-to-sequence (seq2seq) setup from 2014 handles this with two networks: an **encoder** that reads the input and a **decoder** that writes the output. It was the best approach for machine translation before transformers came along, and the original transformer kept the same encoder-decoder layout.
+Think about translation. "Goodbye" is one word in English and two in French ("au revoir"). The output has a different length from the input, and it has to depend on that input, not just on the words written so far. A plain language model doesn't quite fit. The sequence-to-sequence (seq2seq) setup from 2014 handles this with two networks: an **encoder** that reads the input and a **decoder** that writes the output. The same goes for summarization and question answering. Seq2seq (later with attention added) was the leading approach to machine translation before transformers, and the original transformer kept the same encoder-decoder layout.
 
 ## How it's put together
 
-1. The **encoder** is an RNN (here a GRU, a simpler cousin of the LSTM) that reads the source tokens one by one. Its last hidden state is a fixed-size vector that's supposed to sum up the whole source sentence. People often call it the **context vector**.
+1. The **encoder** is a [recurrent neural network](/notes/recurrent-neural-networks/) (here a GRU, a simpler cousin of the [LSTM](/notes/lstm/)) that reads the source tokens one by one. Its last hidden state is a fixed-size vector that's supposed to sum up the whole source sentence. People often call it the **context vector**.
 2. The **decoder** is a second RNN that starts from that context vector as its hidden state. It writes the target sentence one token at a time, like a language model, feeding each token it produces back in as the next input.
 
 Two special tokens make this work:
@@ -95,7 +95,7 @@ The encoder's GRU reads the whole source sentence in one call. The decoder has t
 
 ## Training with teacher forcing
 
-During training we know the right target sentence. **Teacher forcing** means feeding the decoder the *correct* previous token at each step, not the token it just guessed. That way one early mistake doesn't throw off the rest of the sentence, and training gets much faster and more stable.
+Here's the problem. Early in training the decoder guesses wrong almost every time. If each wrong guess becomes the next input, the rest of the sentence is built on garbage. But during training we know the right target sentence. **Teacher forcing** means feeding the decoder the *correct* previous token at each step, not the token it just guessed. That way one early mistake doesn't throw off the rest of the sentence, and training gets much faster and more stable.
 
 ```python
 enc, dec = Encoder(len(src_vocab), 32), Decoder(len(tgt_vocab), 32)
@@ -146,7 +146,7 @@ Greedy decoding can lock in a word early that leads nowhere. **Beam search** kee
 
 ## The bottleneck, and how it led to attention
 
-The whole source sentence has to fit into one hidden vector of fixed size. For a three-word phrase that's fine. For a 50-word sentence, the decoder has to dig every detail out of the same small vector, and translation quality drops fast as sentences get longer.
+There's one weak spot in all this. The whole source sentence has to fit into one hidden vector of fixed size. For a three-word phrase that's fine. For a 50-word sentence, the decoder has to dig every detail out of the same small vector, and translation quality drops fast as sentences get longer.
 
 Bahdanau, Cho and Bengio (2014) got rid of the bottleneck. They kept **all** the encoder hidden states $h_1, \dots, h_S$ (the `outputs` tensor the encoder above already returns) and let the decoder look back at them at every step. At step $t$, the decoder scores how relevant each encoder state is to its current state $s_{t-1}$, turns the scores into weights with a softmax, and builds its own context vector as a weighted sum:
 

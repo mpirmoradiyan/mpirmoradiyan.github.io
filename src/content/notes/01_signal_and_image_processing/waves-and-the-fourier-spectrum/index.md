@@ -48,7 +48,7 @@ $$
 y(t) = A\cos(2\pi f t + \theta).
 $$
 
-There are two terms inside the cosine. The first, $2\pi f t$, is the angle the wave has gone through by time $t$. The second, $\theta$, is the **phase constant**: the angle the wave started at when $t = 0$. It's worth keeping these two terms apart in your head. In later notes, changing either one shifts the phase, but the two kinds of change behave differently.
+There are two terms inside the cosine. The first, $2\pi f t$, is the angle the wave has gone through by time $t$. The second, $\theta$, is the **phase constant**: the angle the wave started at when $t = 0$. It's worth keeping these two terms apart in your head. Changing either one shifts the phase, but the two kinds of change behave differently, as [Seismic wavelets: amplitude and phase spectra](/notes/wavelet-amplitude-and-phase-spectra/) shows.
 
 ## Phase as a time delay
 
@@ -64,7 +64,7 @@ By convention, **phase is minus the phase lag**, so this wave has phase $-0.48\p
 
 Hang a weight on an ideal spring, pull it down by $0.8$ units and let go at $t = 0$. The position traces a cosine. With a period of $80$ ms, the frequency is $1/0.08 = 12.5$ Hz. A stiffer spring released from $0.4$ units might have a period of $40$ ms, so $25$ Hz.
 
-Now take a second spring, identical to the first, and let it go at the moment the first spring passes through zero, $20$ ms later. Both have the same amplitude and frequency. The only difference is a $20$ ms delay, which is a quarter of the period, so the phase lag is $\pi/2$ ($90°$) and the phase is $-90°$.
+Now take a third spring, identical to the first, and let it go at the moment the first spring passes through zero, $20$ ms later. Both have the same amplitude and frequency. The only difference is a $20$ ms delay, which is a quarter of the period, so the phase lag is $\pi/2$ ($90°$) and the phase is $-90°$.
 
 ![Three spring motions with their amplitude and phase spectra](fig-spring-spectra.png)
 

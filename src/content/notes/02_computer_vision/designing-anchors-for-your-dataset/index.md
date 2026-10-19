@@ -209,7 +209,7 @@ With the usual RPN rule (an anchor counts as positive at IoU $\ge 0.7$), an anch
 
 So when you put your data-driven sizes onto a pyramid:
 
-- **Put each size on a level where size/stride is roughly 4 to 8.** One level can hold several sizes, and most frameworks allow that.
+- **Put each size on a level where size/stride is roughly 6 to 8.** Down to about 4 can still work thanks to the "best anchor per object" rule, but below that the grid starts to hurt. One level can hold several sizes, and most frameworks allow that.
 - **If your objects are smaller than about $6\times$ the finest stride**, no amount of anchor tuning fixes the grid. For the 14-pixel objects here, even stride 4 gives only $m = 3.5$. The usual fixes are to upscale the input (or tile and upscale, see the [tiling note](/notes/tiling-large-images-for-detection/)), add a finer level, or lower the positive IoU threshold and rely on the "best anchor per object" rule.
 - **Levels with no matching sizes** still cost compute. If no object needs stride 64, that level is just overhead.
 

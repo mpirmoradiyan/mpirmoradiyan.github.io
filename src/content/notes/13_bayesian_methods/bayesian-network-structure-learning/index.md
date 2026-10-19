@@ -101,7 +101,7 @@ The Asia network contains a node ("either tuberculosis or lung cancer") that's a
 ## Resources
 
 - Marco Scutari, Jean-Baptiste Denis, *Bayesian Networks with Examples in R*, 2nd ed., Chapters 1-2: https://www.bnlearn.com/book-crc-2ed/
-- Daphne Koller, Nir Friedman, *Probabilistic Graphical Models*, Section 3.4 (I-equivalence) and Chapter 18 (structure learning), MIT Press, 2009.
+- Daphne Koller, Nir Friedman, *Probabilistic Graphical Models*, Section 3.3.4 (I-equivalence) and Chapter 18 (structure learning), MIT Press, 2009.
 - bnlearn documentation, `hc`, `cpdag`, `vstructs`: https://www.bnlearn.com/documentation/
 - Steffen L. Lauritzen, David J. Spiegelhalter, "Local computations with probabilities on graphical structures and their application to expert systems", *JRSS B* 50(2) (1988), origin of the Asia example: https://doi.org/10.1111/j.2517-6161.1988.tb01721.x
 - 732A96 Advanced Machine Learning, Linköping University (course lab, autumn 2020).

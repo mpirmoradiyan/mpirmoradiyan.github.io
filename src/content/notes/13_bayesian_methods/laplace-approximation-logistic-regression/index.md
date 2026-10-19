@@ -85,7 +85,7 @@ Was it "an important determinant"? Our report argued yes because its absolute va
 
 ## When to trust it
 
-The approximation is good when the posterior really is close to normal: lots of data relative to the number of parameters, and parameters away from boundaries. It gets worse with small samples, with separation in logistic regression (where the MLE runs off to infinity), and for parameters like variances that are bounded below (better to approximate $\log\sigma$ than $\sigma$). In the next lab we checked it against MCMC, see [random-walk Metropolis](/notes/random-walk-metropolis/).
+The approximation is good when the posterior really is close to normal: lots of data relative to the number of parameters, and parameters away from boundaries. It gets worse with small samples, with separation in logistic regression (where the MLE runs off to infinity), and for parameters like variances that are bounded below (better to approximate $\log\sigma$ than $\sigma$). In the next lab we checked it against MCMC, see [random-walk Metropolis](/notes/metropolis-hastings-and-gelman-rubin/).
 
 ## Key takeaways
 

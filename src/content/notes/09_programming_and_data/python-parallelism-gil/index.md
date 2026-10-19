@@ -22,22 +22,22 @@ sources:
 status: draft
 ---
 
-Python gives you three ways to do several things at once: threads, processes and asyncio. Pick the wrong one and you get no speed-up at all, or the code even gets slower. I found this out the hard way. My first benchmark pushed a tiny function through a process pool, and it ran much slower than a plain `for` loop. These notes are me working out why, and ending up with a simple rule for choosing.
+My first try at parallel Python went backwards. I pushed a tiny function through a process pool, expecting it to fly, and it ran much slower than a plain `for` loop. That made me stop and look properly. Python gives you three ways to do several things at once: threads, processes and asyncio. Pick the wrong one and you get no speed-up at all, or the code even gets slower. These notes are me working out why, and ending up with a simple rule for choosing.
 
 ## Two kinds of slow code
 
-The first question is: what is the program actually waiting for?
+The question that cleared things up for me was simple: what is the program actually waiting for?
 
 - **CPU-bound** code spends its time computing: parsing, number loops, image processing in pure Python. It only gets faster if more CPU cores work on it.
 - **I/O-bound** code spends its time waiting: for a web server, a disk, a database or a queue. The CPU just sits there during the wait. It gets faster if other work can happen during the wait. More cores don't help.
 
 ## The GIL
 
-CPython, the normal Python interpreter, has a **Global Interpreter Lock (GIL)**. Only the thread holding the lock can run Python bytecode. So in a normal CPython build, two threads never run Python code at the same moment, even on an 8-core machine. This was the part that surprised me most.
+This was the part that surprised me most. CPython, the normal Python interpreter, has a **Global Interpreter Lock (GIL)**. Only the thread holding the lock can run Python bytecode. So in a normal CPython build, two threads never run Python code at the same moment, even on an 8-core machine. Think of one microphone passed around a room: lots of people, but only one talks at a time.
 
 The GIL is let go while a thread waits for I/O (`time.sleep`, reading a socket, reading a file) and inside many C extensions (NumPy, OpenCV and similar libraries release it during heavy loops). That's why threads still help with I/O, and with code that spends most of its time inside those libraries.
 
-Since Python 3.13 there's also an experimental **free-threaded** build (PEP 703, installed as `python3.13t`) where the GIL can be switched off. It's still a separate build, and lots of extension packages aren't ready for it yet, so everything below is about the normal build.
+Since Python 3.13 there's also a **free-threaded** build (PEP 703, installed as `python3.13t`, `python3.14t` and so on) where the GIL is turned off. It was experimental in 3.13. Since 3.14 it's officially supported (PEP 779), but it's still an optional, separate build, not the default, and some extension packages don't support it yet. Everything below is about the normal build, which still has the GIL.
 
 ## The three tools
 
@@ -64,7 +64,8 @@ def fake_io(_):               # I/O-bound: just waits
 async def fake_io_async(_):
     await asyncio.sleep(0.1)
 
-if __name__ == "__main__":    # needed for process pools on macOS and Windows
+if __name__ == "__main__":    # needed for process pools: with "spawn" (macOS, Windows) and
+                              # "forkserver" (Linux default since 3.14) workers re-import this file
     jobs = [60_000] * 16
     with ThreadPoolExecutor(8) as ex:  list(ex.map(count_primes, jobs))   # ~1.25 s
     with ProcessPoolExecutor(8) as ex: list(ex.map(count_primes, jobs))   # ~0.33 s
@@ -85,14 +86,17 @@ The results line up with the theory:
 My original benchmark looked like this:
 
 ```python
+from multiprocessing import Pool
+
 def multiplier(coef=3):
     return coef * 2
 
-with Pool() as p:
-    result = p.map(multiplier, range(100_000))
+if __name__ == "__main__":
+    with Pool() as p:
+        result = p.map(multiplier, range(100_000))
 ```
 
-The loop version took about 0.007 s. The pool version took about 0.14 s, twenty times slower. The work for each item is one multiplication, a few nanoseconds. But for each item the pool has to pickle (serialize) the argument, send it through a pipe to a worker process, unpickle it, run the function, and send the result back the same way. That overhead is far bigger than the work itself. On top of that, starting the worker processes costs tens of milliseconds.
+The loop version took about 0.007 s. The pool version took about 0.14 s, twenty times slower. Why? The work for each item is one multiplication, a few nanoseconds. But for each item the pool has to pickle (serialize) the argument, send it through a pipe to a worker process, unpickle it, run the function, and send the result back the same way. That overhead is far bigger than the work itself. On top of that, starting the worker processes costs tens of milliseconds.
 
 Two things control this overhead:
 
@@ -103,7 +107,7 @@ Libraries like `joblib` (with the `loky` backend) and `mpire` add progress bars,
 
 ## Map-reduce on top of `Pool.map`
 
-Map-reduce is a way to shape a computation so that most of it can run in parallel. It has three steps:
+Once the overhead made sense, the next question was how to shape bigger jobs. Map-reduce is a way to shape a computation so that most of it can run in parallel. It has three steps:
 
 1. **Map**: turn each input record into `(key, value)` pairs, each one on its own.
 2. **Shuffle**: group together all values that share a key.
@@ -148,7 +152,7 @@ For five words the pool is pure overhead, for the reasons above. The point of th
 ## Key takeaways
 
 - First figure out if the code is CPU-bound or I/O-bound. That decides the tool.
-- In normal CPython, the GIL stops threads from running Python code in parallel, so threads don't speed up pure-Python computation. Free-threaded builds (3.13+) are still experimental.
+- In normal CPython, the GIL stops threads from running Python code in parallel, so threads don't speed up pure-Python computation. Free-threaded builds (3.13+, officially supported since 3.14) remove the GIL, but they're still optional, not the default.
 - Process pools pay for start-up and for pickling every argument and result. Tiny tasks or `chunksize=1` can make them much slower than a loop.
 - Threads and asyncio both overlap waiting. asyncio scales to more tasks at once but needs async libraries.
 - Map-reduce splits work into independent map and reduce steps that a pool (or a cluster) can run in parallel, with a shuffle in between.
@@ -158,5 +162,6 @@ For five words the pool is pure overhead, for the reasons above. The point of th
 - Tiago Rodrigues Antão, *Fast Python: High Performance Techniques for Large Datasets*, Manning, 2023, chapter 3 (the naive map-reduce word count is adapted from there). https://www.manning.com/books/fast-python
 - Python documentation: `multiprocessing` (including `Pool.map` and `chunksize`), `concurrent.futures`, `asyncio`. https://docs.python.org/3/library/concurrency.html
 - Sam Gross, PEP 703: Making the Global Interpreter Lock Optional in CPython. https://peps.python.org/pep-0703/
+- PEP 779: Criteria for supported status for free-threaded Python (accepted for 3.14). https://peps.python.org/pep-0779/
 - Python docs, "Free-threaded CPython" HOWTO. https://docs.python.org/3/howto/free-threading-python.html
 - Jeffrey Dean and Sanjay Ghemawat, "MapReduce: Simplified Data Processing on Large Clusters", OSDI 2004.

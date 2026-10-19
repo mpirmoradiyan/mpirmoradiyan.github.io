@@ -23,11 +23,11 @@ sources:
 status: draft
 ---
 
-`loss.backward()` hides a lot. When training goes wrong (dead units, exploding gradients, a shape bug that doesn't throw an error), it helps to know what actually flows backwards through each line of the forward pass. So in this exercise I threw out autograd and wrote the backward pass for the MLP language model by hand, one tensor at a time, checking each gradient against PyTorch. The chain rule for single numbers is in the [micrograd note](/notes/backpropagation-micrograd/). Here it's all about tensors, shapes and broadcasting.
+`loss.backward()` is one line, and it hides a lot. When training goes wrong (dead units, exploding gradients, a shape bug that doesn't throw an error), it helps to know what actually flows backwards through each line of the forward pass. So for this exercise I threw out autograd. I wrote the backward pass for the MLP language model by hand, one tensor at a time, and checked each gradient against PyTorch. The chain rule for single numbers is in my [micrograd note](/notes/backpropagation-micrograd/). This one is all about tensors, shapes and broadcasting.
 
 ## The forward pass, cut into small steps
 
-The model turns 3 characters into 10-dimensional vectors, then runs a linear layer, batch normalization and tanh, then an output layer. I wrote the cross-entropy loss out step by step so every in-between result has a name.
+The model turns 3 characters into 10-dimensional vectors, then runs a linear layer, batch normalization and tanh, then an output layer. To make the backward pass doable, I wrote the cross-entropy loss out in tiny steps, so every in-between result has a name.
 
 ```python
 emb = C[Xb]                                  # (32, 3, 10)
@@ -50,13 +50,15 @@ Each in-between tensor gets `retain_grad()`, so I can compare my hand-computed g
 
 ## Two rules that sort out most of the shapes
 
-**1. A gradient has the same shape as the thing it belongs to.** `dW2` has to be (64, 27) because `W2` is. Just this often tells you where a transpose goes.
+Two simple rules sort out almost all of the shapes.
 
-**2. Broadcasting and summing are mirror images.** This was the most useful thing I took from the exercise.
+**1. A gradient has the same shape as the thing it belongs to.** `dW2` has to be (64, 27) because `W2` is. That alone often tells you where a transpose goes.
+
+**2. Broadcasting and summing are mirror images.** This was the most useful thing I took from the whole exercise.
 - If a tensor was **broadcast** (copied) in the forward pass, **sum** its gradient over the copied dimension in the backward pass. Example: `b2` of shape (27,) is added to every row of the (32, 27) logits, so `db2 = dlogits.sum(0)`.
 - If a tensor was **summed** in the forward pass, **broadcast** the gradient back. Example: `counts_sum = counts.sum(1, keepdim=True)`, so every element in a row of `counts` gets the gradient of that row's sum.
 
-If a variable is used in two places, it collects gradient from both, and you add them up. `counts` feeds both `probs` and `counts_sum`, so `dcounts` has two parts.
+And if a variable is used in two places, it collects gradient from both, and you add them up. `counts` feeds both `probs` and `counts_sum`, so `dcounts` has two parts.
 
 ## Walking backwards
 
@@ -76,7 +78,7 @@ dlogit_maxes = (-dnorm_logits).sum(1, keepdim=True)
 dlogits += F.one_hot(logits.max(1).indices, 27) * dlogit_maxes
 ```
 
-`dlogit_maxes` comes out as basically zero. That makes sense once you think about it: subtracting the same number from every logit in a row doesn't change the softmax, so the loss can't depend on it. Subtracting the max is only there to stop `exp` from overflowing.
+`dlogit_maxes` came out as basically zero. It makes sense once you think about it. Subtracting the same number from every logit in a row doesn't change the softmax, so the loss can't depend on it. Subtracting the max is only there to stop `exp` from overflowing.
 
 For a linear layer $Y = XW + b$ the rules are
 
@@ -97,7 +99,7 @@ dhpreact = (1.0 - h**2) * dh # tanh'(x) = 1 - tanh(x)^2
 
 ## The gradient of cross-entropy in one line
 
-All eight steps from `logits` to `loss` boil down to a short formula. For one example with logits $z$, softmax probabilities $p = \text{softmax}(z)$ and target $y$, the loss is $-\log p_y$ and
+After all that work, the surprise: all eight steps from `logits` to `loss` boil down to a short formula. For one example with logits $z$, softmax probabilities $p = \text{softmax}(z)$ and target $y$, the loss is $-\log p_y$ and
 
 $$
 \frac{\partial L}{\partial z_j} = p_j - \mathbb{1}[j = y].
@@ -111,13 +113,13 @@ dlogits[range(n), Yb] -= 1
 dlogits /= n
 ```
 
-This matched PyTorch to about $10^{-9}$. I also like how easy it is to read: every wrong class gets pushed down in proportion to the probability the model gave it, and the correct class gets pulled up by $1 - p_y$. Each row of `dlogits` adds up to zero, so the pushing and the pulling balance out.
+This matched PyTorch to about $10^{-9}$. I also like how easy it is to read. Every wrong class gets pushed down in proportion to the probability the model gave it. The correct class gets pulled up by $1 - p_y$. Each row of `dlogits` adds up to zero, so the pushing and the pulling balance out.
 
 ![Left: the 32 by 27 logits of a batch, which look like random noise at initialization. Right: the gradient with respect to the logits. Every row has one dark cell at the target character (negative gradient) and small light values elsewhere.](fig-logits-and-dlogits.png)
 
 ## Through batch norm, and into the embedding table
 
-Batch normalization ties all the examples in a batch together through the mean and variance, so its backward pass has several paths. This was the trickiest part. Doing it step by step and then simplifying on paper gives one expression. Here $\hat{x}$ is the normalized pre-activations, $\gamma$ the gain, $\sigma^{-1} = (\text{var} + \epsilon)^{-1/2}$, and the variance is the unbiased one (divide by $n-1$):
+Batch normalization was the trickiest part. It ties all the examples in a batch together through the mean and variance, so its backward pass has several paths. Doing it step by step and then simplifying on paper gives one expression. Here $\hat{x}$ is the normalized pre-activations, $\gamma$ the gain, $\sigma^{-1} = (\text{var} + \epsilon)^{-1/2}$, and the variance is the unbiased one (divide by $n-1$):
 
 $$
 \frac{\partial L}{\partial x} = \frac{\gamma\,\sigma^{-1}}{n}\left(n\,\frac{\partial L}{\partial y} - \sum_{i}\frac{\partial L}{\partial y_i} - \frac{n}{n-1}\,\hat{x}\sum_{i}\frac{\partial L}{\partial y_i}\,\hat{x}_i\right)
@@ -128,6 +130,7 @@ The sums go over the batch, separately for each of the 64 features. I'm just wri
 The last step is the embedding lookup `emb = C[Xb]`. Each row of `C` got copied into `emb` once for every time its character showed up in the batch. So the gradient of a row of `C` is the **sum** of the gradients at all the positions that used it. That's called a scatter-add:
 
 ```python
+dembcat = dhprebn @ W1.T                       # back through the first linear layer
 demb = dembcat.view(emb.shape)                 # undo the flatten
 dC = torch.zeros_like(C)
 dC.index_add_(0, Xb.view(-1), demb.view(-1, C.shape[1]))
@@ -137,7 +140,7 @@ My first version used two nested Python loops over batch and position. Same resu
 
 ## Training with only my own gradients
 
-With every gradient in place, I removed `loss.backward()`, wrapped the loop in `torch.no_grad()`, and trained the network for 200,000 steps using only my hand-written backward pass. The loss went from 3.77 to around 1.9-2.0 on the minibatches, the same as with autograd. That was a satisfying moment. A final check of all parameter gradients against PyTorch showed differences below $2 \times 10^{-8}$. Those tiny differences come from floating-point rounding when the math is done in a different order, not from mistakes.
+The real test: with every gradient in place, I removed `loss.backward()`, wrapped the loop in `torch.no_grad()`, and trained the network for 200,000 steps using only my hand-written backward pass. The loss went from 3.77 to around 1.9-2.0 on the minibatches, the same as with autograd. That was a satisfying moment. A final check of all parameter gradients against PyTorch showed differences below $2 \times 10^{-8}$. Those tiny differences come from floating-point rounding when the math is done in a different order, not from mistakes.
 
 ## Key takeaways
 

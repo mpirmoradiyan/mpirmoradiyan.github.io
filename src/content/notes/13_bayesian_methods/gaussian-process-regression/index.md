@@ -22,7 +22,7 @@ sources:
 status: draft
 ---
 
-A Gaussian process (GP) is a way to put a prior directly on functions, without choosing a parametric form like "quadratic". You only say how similar the function's values at two inputs should be, through a kernel, and Bayes does the rest. In the last Advanced Machine Learning lab I implemented the GP posterior by hand, then used `kernlab` on six years of daily temperatures. The math is short; the traps were about scales.
+The first time I heard "a prior over functions" it sounded like magic. It's simpler than it sounds. A Gaussian process (GP) lets you put a prior directly on functions, without choosing a form like "quadratic" first. You only say how similar the function's values at two inputs should be, through a kernel, and Bayes does the rest. In the last Advanced Machine Learning lab I implemented the GP posterior by hand, then used `kernlab` on six years of daily temperatures. The math is short; the traps were about scales.
 
 ## A prior over functions
 
@@ -82,7 +82,7 @@ The snippet shows the catch. With $\ell = 1$ the band is *narrower*, but the mod
 
 Hyperparameters only mean something relative to the units of $x$ and $y$. "$\ell = 0.2$" is tiny if $x$ is a day number from 1 to 2190, and reasonable if $x$ has been standardised. `kernlab::gausspr` standardises both inputs and outputs by default (`scaled = TRUE`), so its $\ell$ lives on the standardised scale.
 
-In my lab report I computed the posterior variance myself (because `gausspr` didn't return it reliably) but mixed the scales: standardised temperatures, raw day numbers for time, $\ell = 0.2$ and a noise level taken from residuals in raw degrees. The resulting band wasn't the band of the model `gausspr` had fitted. To be consistent, standardise $x$ and $y$ the same way the package does, compute mean and variance on that scale, then transform back (multiply standard deviations by $\text{sd}(y)$).
+In my lab report I computed the posterior variance myself, but I mixed the scales: standardised temperatures, raw day numbers for time, $\ell = 0.2$ and a noise level taken from residuals in raw degrees. The resulting band wasn't the band of the model `gausspr` had fitted. To be consistent, standardise $x$ and $y$ the same way the package does, compute mean and variance on that scale, then transform back (multiply standard deviations by $\text{sd}(y)$).
 
 I also drew the band as mean $\pm 1$ standard deviation while calling it a 95% band. A pointwise 95% band is mean $\pm 1.96$ standard deviations.
 
@@ -96,7 +96,7 @@ $$
 
 where $d$ is the period (one year), $\ell_1$ controls how smooth the function is within a period, and $\ell_2$ controls how quickly the correlation between the same day in different years fades. The first factor alone says "every year is identical"; multiplying by the second (a "locally periodic" kernel) lets the yearly pattern drift slowly. In the lab this model sat between the other two: it followed the seasonal shape and still allowed year-to-year differences. Building kernels by multiplying and adding simpler ones is one of the nicest things about GPs.
 
-`gausspr` also does GP *classification* (with a logistic-type link and an approximate posterior). In the lab, going from two to all four features of a banknote dataset raised test accuracy from 0.925 to 0.995 with default settings, which mostly showed how easy it is to use rather than anything deep.
+`gausspr` also does GP *classification*. In the lab, going from two to all four features of a banknote dataset raised test accuracy from 0.925 to 0.995 with default settings, which mostly showed how easy it is to use rather than anything deep.
 
 ## Key takeaways
 

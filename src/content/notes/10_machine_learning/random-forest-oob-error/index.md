@@ -26,7 +26,7 @@ sources:
 status: draft
 ---
 
-A single deep decision tree is unstable: change a few training rows and the tree can look completely different. Random forests and boosting both fix this by combining many trees, but in opposite ways. In a lab on spam classification I compared the two as the number of trees grew, and I also learned that the out-of-bag error, the forest's built-in error estimate, is easy to read wrong.
+In a lab on spam classification I compared random forests and boosting as the number of trees grew. My forest's "out-of-bag error" came out higher than the test error, and I took that as a sign the forest generalized perfectly. It wasn't. I had read the number wrong. Getting to the bottom of it taught me how forests work in the first place. The starting problem is simple: a single deep decision tree is unstable. Change a few training rows and the tree can look completely different. Random forests and boosting both fix this by combining many trees, but in opposite ways.
 
 ## Why averaging trees helps
 

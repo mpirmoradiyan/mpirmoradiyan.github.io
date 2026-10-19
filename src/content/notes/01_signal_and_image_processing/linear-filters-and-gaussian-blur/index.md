@@ -40,7 +40,7 @@ This tripped me up at first: many libraries actually compute **correlation**, $\
 
 ## The box filter and what's wrong with it
 
-The simplest blur just averages a square neighbourhood: a $5 \times 5$ kernel with every entry $1/25$. It works, but its frequency response is a 2D sinc. The sinc has side lobes (little bumps on each side), so some high frequencies get through with their sign flipped. In practice this can leave faint ringing, and it makes the box a poor anti-aliasing filter.
+The simplest blur just averages a square neighbourhood: a $5 \times 5$ kernel with every entry $1/25$. It works, but its frequency response looks like a sinc along each axis. A sinc has side lobes (little bumps on each side), so some high frequencies get through, some of them with their sign flipped. In practice this can leave faint ringing, and it makes the box a poor anti-aliasing filter.
 
 ## The Gaussian kernel
 

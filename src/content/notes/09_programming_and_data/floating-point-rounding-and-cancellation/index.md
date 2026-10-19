@@ -28,17 +28,17 @@ sources:
 status: draft
 ---
 
-A computer stores a real number as a double: 53 binary digits of mantissa and an exponent. That's plenty for most things, but it means almost every number you type is rounded a little, and some innocent-looking formulas turn that tiny rounding into a big error. The first lab of the computational statistics course was all about this, and it's worth keeping three traps in mind.
+The first lab of my computational statistics course started with something that looked like a typo. In R, `1/3 - 1/4 == 1/12` gives `FALSE`. The maths is right, so what's going on? The answer is how a computer stores a real number. It uses a double: 53 binary digits of mantissa and an exponent. That's plenty for most things. But it means almost every number you type gets rounded a little. And some innocent-looking formulas turn that tiny rounding into a big error. The lab walked us through three of these traps, and I want to keep them in mind.
 
 ## Trap 1: comparing doubles with `==`
 
-A double can only hold numbers of the form (integer) $\times 2^{e}$. So a fraction is stored exactly only if its denominator is a power of two. $1/2$, $1/4$ and $3/8$ are exact. $1/3$, $1/12$ and even $0.1$ are not: their binary expansions repeat forever, so they get rounded to the nearest double.
+Here's the thing I had to get first. A double can only hold numbers of the form (integer) $\times 2^{e}$. So a fraction is stored exactly only if its denominator is a power of two. $1/2$, $1/4$ and $3/8$ are exact. $1/3$, $1/12$ and even $0.1$ are not: their binary expansions repeat forever, so they get rounded to the nearest double.
 
-That's why `1/3 - 1/4 == 1/12` is `FALSE`, while `1 - 1/2 == 1/2` is `TRUE`. Each side of the first comparison is rounded separately, and the two rounded results don't land on the same double.
+So that's why `1/3 - 1/4 == 1/12` is `FALSE`, while `1 - 1/2 == 1/2` is `TRUE`. Each side of the first comparison is rounded separately, and the two rounded results don't land on the same double.
 
 In our group's lab report we explained this as "1/2 and 1/4 are finite numbers, while 1/3 recurs". That's half right. What matters is a finite expansion in *base 2*, not base 10. $0.1$ is a finite decimal, but `0.1 + 0.2 == 0.3` is still `FALSE` because $1/10$ has no finite binary expansion.
 
-We "fixed" the comparison by rounding both sides to 2 decimals. That works for this one example but is fragile: two numbers that differ by $10^{-17}$ can still round to different 2-decimal values if they sit right next to a rounding boundary. The usual fix is to compare with a tolerance:
+We "fixed" the comparison by rounding both sides to 2 decimals. That works for this one example, but it's fragile: two numbers that differ by $10^{-17}$ can still round to different 2-decimal values if they sit right next to a rounding boundary. The usual fix is to compare with a tolerance:
 
 $$
 |a - b| \le \varepsilon_{\text{abs}} \quad\text{or}\quad |a - b| \le \varepsilon_{\text{rel}} \max(|a|, |b|),
@@ -54,7 +54,7 @@ $$
 f'(x) \approx \frac{f(x + h) - f(x)}{h},
 $$
 
-where $h$ is a small step. For $f(x) = x$ the true answer is always 1. With $h = 10^{-15}$, our lab code returned $1.110223$ at $x = 1$ and $0$ at $x = 100000$.
+where $h$ is a small step. My first instinct was "smaller $h$, better answer". The lab showed that's not true. For $f(x) = x$ the true answer is always 1. With $h = 10^{-15}$, our lab code returned $1.110223$ at $x = 1$ and $0$ at $x = 100000$. Both are wrong, in different ways.
 
 The key number is **machine epsilon**, $\varepsilon_{\text{mach}} = 2^{-52} \approx 2.22 \times 10^{-16}$. It's the gap between 1 and the next double. Near a number $x$ the gap is roughly $\varepsilon_{\text{mach}} |x|$.
 
@@ -71,7 +71,7 @@ $$
 s^2 = \frac{1}{n-1}\left(\sum_{i=1}^n x_i^2 - \frac{1}{n}\Big(\sum_{i=1}^n x_i\Big)^2\right),
 $$
 
-where $x_1, \dots, x_n$ are the data and $n$ is the sample size. It's correct on paper and needs only one pass over the data. But if the data are like $10^8 \pm 1$, both big sums are about $n \cdot 10^{16}$, and the difference we want is about $n$. Each sum has a rounding error of roughly $\varepsilon_{\text{mach}} \cdot n \cdot 10^{16} \approx 2n$, which is the same size as the answer. Subtracting two big, nearly equal, slightly wrong numbers leaves mostly error. That's **catastrophic cancellation**.
+where $x_1, \dots, x_n$ are the data and $n$ is the sample size. It's correct on paper, and it needs only one pass over the data, so it looks like the smart choice. But if the data are like $10^8 \pm 1$, both big sums are about $n \cdot 10^{16}$, and the difference we want is about $n$. Each sum has a rounding error of roughly $\varepsilon_{\text{mach}} \cdot n \cdot 10^{16} \approx 2n$, which is the same size as the answer. Subtracting two big, nearly equal, slightly wrong numbers leaves mostly error. That's **catastrophic cancellation**.
 
 The fix is to never form the big sums. Welford's method updates a running mean and a running sum of squared deviations:
 
@@ -99,7 +99,7 @@ c(naive = naive_var(x), welford = welford_var(x), R = var(x))
 # 1.638564 1.024866 1.024866
 ```
 
-The naive version is off by more than 60%. Welford matches R's `var()`, which centres the data first (two passes). Another cheap trick: subtract any value close to the mean (say $x_1$) from all data before using the one-pass formula. Variance doesn't change under a shift, but the cancellation mostly goes away.
+The naive version is off by about 60%. Welford matches R's `var()`, which centres the data first (two passes). Another cheap trick: subtract any value close to the mean (say $x_1$) from all data before using the one-pass formula. Variance doesn't change under a shift, but the cancellation mostly goes away.
 
 The same rounding errors are what make badly conditioned linear systems fail; see [condition numbers](/notes/condition-number-and-ill-conditioned-regression/).
 

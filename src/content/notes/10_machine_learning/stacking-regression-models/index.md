@@ -27,11 +27,11 @@ sources:
 status: draft
 ---
 
-Different regression models make different mistakes. A linear model misses curves, a tree ensemble is blocky between splits, and a nearest-neighbour model struggles where data is sparse. Stacking (or *stacked generalization*) trains a second model to combine their predictions, so one model's strengths can cover another's weaknesses. It often gives a small but real gain. It also has one classic trap: if the combiner sees predictions the base models made on their own training data, it learns to trust the wrong model.
+Here's the situation that got me curious. You've trained a few regression models and they each make different mistakes. A linear model misses curves, a tree ensemble is blocky between splits, and a nearest-neighbour model struggles where data is sparse. So why not let a second model learn how to combine them? That's stacking (or *stacked generalization*): one model's strengths can cover another's weaknesses. It often gives a small but real gain. But there's one classic trap, and it's easy to walk into. If the combiner sees predictions the base models made on their own training data, it learns to trust the wrong model.
 
 ## Two levels
 
-So basically, stacking has two levels:
+So basically, there are two levels:
 
 - **Level 0 (base models):** $M$ different models $f_1, \dots, f_M$, each trained to predict the target $y$ from the features $x$.
 - **Level 1 (meta-model or combiner):** a model $g$ that takes the base predictions $\big(f_1(x), \dots, f_M(x)\big)$ as its input and gives the final prediction.
@@ -136,7 +136,7 @@ print("weights", stack.final_estimator_.coef_.round(2),
 
 **Variety matters more than count.** Three models from different families usually help more than ten tuned versions of one family. If two base models make the same mistakes, the second one adds nothing.
 
-**Use the right folds.** If your data is grouped or spatial, the OOF predictions have to come from grouped folds too. Otherwise the level-1 table leaks group identity and you're back to the in-sample problem. (See the note on grouped cross-validation.)
+**Use the right folds.** If your data is grouped or spatial, the OOF predictions have to come from grouped folds too. Otherwise the level-1 table leaks group identity and you're back to the in-sample problem. (See the note on [grouped cross-validation](/notes/grouped-cross-validation/).)
 
 **Check the whole stack with an outer loop.** The OOF predictions were used to fit the weights, so their error isn't a fair estimate anymore. Keep a test set aside, or wrap the whole stacking procedure in an outer cross-validation.
 

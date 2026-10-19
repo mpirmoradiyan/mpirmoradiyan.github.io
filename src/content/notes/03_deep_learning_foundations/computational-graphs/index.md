@@ -134,7 +134,7 @@ Give these sets to `graphviz` (one box per value showing its label, data and gra
 
 ![Computational graph of a single tanh neuron: x1*w1 and x2*w2 are added, the bias b is added to give n, and tanh(n) gives the output 0.7071](fig-neuron-graph.png)
 
-All the `grad` fields are still zero. Filling them in is what backpropagation does, and that's the next note. The thing to notice here is that the graph already has everything we need. Each node knows its inputs and the operation that combined them, and each operation has a simple local derivative.
+All the `grad` fields are still zero. Filling them in is what backpropagation does, and that's the next note: [backpropagation with micrograd](/notes/backpropagation-micrograd/). The thing to notice here is that the graph already has everything we need. Each node knows its inputs and the operation that combined them, and each operation has a simple local derivative.
 
 ## Key takeaways
 

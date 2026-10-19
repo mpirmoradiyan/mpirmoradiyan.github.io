@@ -21,7 +21,7 @@ sources:
 status: draft
 ---
 
-Kernel regression is one of the simplest ways to predict something: take a weighted average of the observations you already have, and give more weight to the ones that are "close" to the point you're predicting. The interesting part shows up when "close" has several meanings at once. In my Big Data course (a pair lab) we predicted the temperature at a place, date and hour from Swedish weather station data, using three kernels: one for geographic distance, one for the day of the year, one for the time of day. The big lesson was that *how you combine* the three kernels changes the answer a lot.
+In my Big Data course (a pair lab) we had to predict the temperature at some place, date and hour from Swedish weather station data. The method sounded easy: take a weighted average of the readings you have, and give more weight to the ones that are "close". But close in what sense? Close on the map, close in the calendar, or close in the time of day? We used three kernels, one for each. Our first version added them up, and the January predictions came out way too warm. Multiplying them fixed it. So the big lesson was that *how you combine* the kernels changes the answer a lot.
 
 ## The basic estimator
 

@@ -26,11 +26,11 @@ sources:
 status: draft
 ---
 
-Our part-of-speech tagger (embedding, bidirectional LSTM, softmax at every position) reported a test accuracy of 0.9997. Good POS taggers on this data get roughly 95 to 98% of tokens right, so 99.97% should have been a red flag. Looking back, two separate mistakes stacked up, and both are common enough to be worth writing down.
+Our part-of-speech tagger (embedding, bidirectional LSTM, softmax at every position) reported a test accuracy of 0.9997. That number should have worried us: good POS taggers on this data get roughly 95 to 97% of tokens right, so 99.97% was a red flag. When I looked back at it, I found two separate mistakes stacked on top of each other. Both are common enough to be worth writing down.
 
 ## The setup
 
-A tagger reads a sentence and predicts one tag per word: *There/PRON has/AUX been/VERB talk/NOUN ...*. Keras wants one fixed-size tensor, so every sentence gets padded to the length of the longest one with a special index 0 (`<pad>`), and the tag sequence gets padded the same way with a `<pad>` tag. The model outputs, for each sentence $s$ and position $t$, a probability vector over $T$ tags (18 here, counting the pad tag).
+A tagger reads a sentence and predicts one tag per word: *There/PRON has/AUX been/VERB talk/NOUN ...*. Sentences have different lengths, but Keras wants one fixed-size tensor. So every sentence gets padded to the length of the longest one with a special index 0 (`<pad>`), and the tag sequence gets padded the same way with a `<pad>` tag. The model outputs, for each sentence $s$ and position $t$, a probability vector over $T$ tags (18 here, counting the pad tag).
 
 ## Mistake 1: accuracy counted the padding
 
@@ -42,7 +42,7 @@ $$
 
 where $y_{s,t}$ is the gold tag at position $t$ of sentence $s$, $\hat y_{s,t}$ is the prediction, $\mathbb{1}[\cdot]$ is 1 when the condition holds and 0 otherwise, and $m_{s,t}$ is 1 for a real token and 0 for padding. Keras' built-in `accuracy` metric leaves $m$ out and counts every position.
 
-How much does that matter? The training data has 12,543 sentences and the longest has 159 tokens, so the padded tensor has about 2.0 million positions. Only 204,585 of them are real tokens. That's about 10%. The other 90% is padding, and predicting `<pad>` after a run of padding is trivial. So a tagger could get every real word wrong and still score about 90%.
+Does that really matter much? I did the math. The training data has 12,543 sentences and the longest has 159 tokens, so the padded tensor has about 2.0 million positions. Only 204,585 of them are real tokens. That's about 10%. The other 90% is padding, and predicting `<pad>` after a run of padding is trivial. So a tagger could get every real word wrong and still score about 90%.
 
 ```python
 import numpy as np
@@ -54,8 +54,8 @@ y_pred = np.array([[0, 0, 0, 0, 0, 3, 1, 1],     # 1 of 3 real tags right
                    [0, 0, 0, 4, 2, 2, 2, 2]])    # 2 of 5 real tags right
 
 mask = y_true != PAD
-print((y_pred == y_true).mean())         # 0.69: padding counted as "correct"
-print((y_pred == y_true)[mask].mean())   # 0.38: real tokens only
+print((y_pred == y_true).mean())         # 0.6875: padding counted as "correct"
+print((y_pred == y_true)[mask].mean())   # 0.375: real tokens only
 ```
 
 The fix in Keras is `Embedding(..., mask_zero=True)`. The mask then flows through the LSTM, so padding doesn't affect the hidden state, and the loss and metrics skip the padded positions. Index 0 must then be reserved for padding only, which is why the vocabulary starts with `<pad>` and then `<unk>`.

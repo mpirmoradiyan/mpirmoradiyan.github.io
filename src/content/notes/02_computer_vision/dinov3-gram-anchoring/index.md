@@ -39,7 +39,7 @@ sources:
 status: draft
 ---
 
-DINOv3 (Meta AI, August 2025) starts from a simple question: what if we take the DINOv2 recipe and just make everything much bigger? The answer surprised me. The image-level features kept getting better, but the patch-level features (the ones you need for segmentation and depth) slowly got worse. So DINOv3 is mostly the story of spotting that problem and fixing it with a new loss called **Gram anchoring**. I'm assuming the DINOv2 basics here (student, EMA teacher, DINO + iBOT + KoLeo losses). My DINOv2 note covers those.
+DINOv3 (Meta AI, August 2025) starts from a simple question: what if we take the DINOv2 recipe and just make everything much bigger? The answer surprised me. The image-level features kept getting better, but the patch-level features (the ones you need for segmentation and depth) slowly got worse. So DINOv3 is mostly the story of spotting that problem and fixing it with a new loss called **Gram anchoring**. I'm assuming the DINOv2 basics here (student, EMA teacher, DINO + iBOT + KoLeo losses). My [DINOv2 note](/notes/dinov2-self-supervised-features/) covers those.
 
 ## What stays the same
 
@@ -135,7 +135,7 @@ If "Gram matrix" sounds familiar, it's probably from neural style transfer (Gaty
 
 ## Using a released model
 
-The small model `facebook/dinov3-vits16-pretrain-lvd1689m` has 12 blocks, 6 heads, 384-dimensional tokens and a normal GELU MLP (1536 hidden units). The SwiGLU feed-forward layers are only in the big 7B teacher. For a 224×224 input with patch size 16 you get $14 \times 14 = 196$ patches. The output sequence is 1 `[CLS]` + 4 registers + 196 patches = 201 tokens. The easy mistake here is forgetting the registers, so skip them when you pull out the patch tokens:
+The small model `facebook/dinov3-vits16-pretrain-lvd1689m` has 12 blocks, 6 heads, 384-dimensional tokens and a normal GELU MLP (1536 hidden units). The SwiGLU feed-forward layers are in the big 7B teacher and the "plus" variants (ViT-S+ and H+), not in this one. For a 224×224 input with patch size 16 you get $14 \times 14 = 196$ patches. The output sequence is 1 `[CLS]` + 4 registers + 196 patches = 201 tokens. The easy mistake here is forgetting the registers, so skip them when you pull out the patch tokens:
 
 ```python
 from transformers import AutoImageProcessor, AutoModel

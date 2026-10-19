@@ -22,7 +22,7 @@ sources:
 status: draft
 ---
 
-One-step-ahead prediction with an AR model is easy because you always have the real past values. Forecasting a year ahead is different: the values you need haven't happened yet, so you feed your own predictions back in. In my course lab, when I ran this recursion for a long time on the detrended sea-level data, the forecast flattened out to zero. That's expected, but my explanation of *why* was wrong, so this note is about getting it right.
+After fitting an [AR model](/notes/autoregressive-models-and-order-selection/), one-step-ahead prediction felt easy, because you always have the real past values. Then the lab asked for a forecast a year ahead, and that's a different game: the values you need haven't happened yet, so you feed your own predictions back in. When I ran this for a long time on the detrended sea-level data, the forecast slowly flattened out to zero. That part is expected. But the reason I gave for it in my report was wrong, so this note is me getting it right.
 
 ## Forecasting by recursion
 

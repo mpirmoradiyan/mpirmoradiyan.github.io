@@ -24,7 +24,7 @@ sources:
 status: draft
 ---
 
-The EM (expectation-maximisation) algorithm is a way to do maximum likelihood when some data are missing or hidden. The idea: if you knew the missing values, the likelihood would be easy to maximise. You don't, so you replace the complete-data log-likelihood by its expected value given what you do know and the current parameter guess, maximise that, and repeat. The last computational statistics lab had a small example where everything can be done by hand, which makes it a good one to keep.
+Here's the situation that EM (expectation-maximisation) solves. You want a maximum likelihood estimate, but some of your data are missing. If you had the missing values, the likelihood would be easy to maximise. You don't have them. So EM goes in circles on purpose: guess the parameter, work out what the log-likelihood would look like *on average* given that guess and the data you do have, maximise that, and repeat. For a long time EM felt abstract to me. What finally made it click was a small example from the last computational statistics lab, where every step can be done by hand.
 
 ## The model
 
@@ -99,7 +99,7 @@ c(em = new, direct = (sum(X * Y) + sum(X[obs] * Z[obs]) / 2) / (n + sum(obs)))
 # 10.39284 10.39275
 ```
 
-EM gets more interesting when the hidden part is bigger than a few missing values: see [EM for a mixture of Bernoullis](/notes/em-for-bernoulli-mixtures/) and [EM for state space models](/notes/em-for-state-space-models/).
+For the more everyday way to deal with missing values, see [missing data and multiple imputation](/notes/missing-data-and-multiple-imputation/). EM gets more interesting when the hidden part is bigger than a few missing values: see [EM for a mixture of Bernoullis](/notes/em-for-bernoulli-mixtures/) and [EM for state space models](/notes/em-for-state-space-models/).
 
 ## Key takeaways
 

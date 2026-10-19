@@ -58,7 +58,7 @@ Six rounds are enough here. Each step fixes one set of sums and slightly breaks 
 
 The result always looks like $D = \operatorname{diag}(r)\, A\, \operatorname{diag}(c)$ for two positive vectors $r$ and $c$. This took me a moment to see: every row division multiplies a row by a number, and every column division multiplies a column by a number, so multiplying all those numbers together gives $r$ and $c$. So the algorithm is really just searching for two scaling vectors. You only need to keep those, not the whole matrix at every step. That's the form used below.
 
-**When there are zeros.** If $A$ has zeros, the result may not exist, or it may take a long time to get there. The matrix $\begin{pmatrix}1&1\\0&1\end{pmatrix}$ can only be balanced into the identity, which means the top-right entry has to go to zero. It does, but only like $1/(2k)$ after $k$ rounds (0.0048 after 100 rounds, 0.0005 after 1000). The exact condition for a perfect balance is that $A$ has *total support*: every non-zero entry lies on some permutation that avoids the zeros.
+**When there are zeros.** If $A$ has zeros, the result may not exist, or it may take a long time to get there. The matrix $\begin{pmatrix}1&1\\0&1\end{pmatrix}$ can only be balanced into the identity, which means the top-right entry has to go to zero. It does, but only like $1/(2k)$ after $k$ rounds (0.0050 after 100 rounds, 0.0005 after 1000). The exact condition for a perfect balance is that $A$ has *total support*: every non-zero entry lies on some permutation that avoids the zeros.
 
 ## From balancing to optimal transport
 
@@ -68,7 +68,7 @@ $$
 \min_{P \ge 0} \; \sum_{ij} P_{ij} C_{ij} \quad \text{subject to} \quad P\mathbf{1} = a, \;\; P^\top \mathbf{1} = b .
 $$
 
-The constraints just say the row sums of $P$ are $a$ and the column sums are $b$. With $a = b = \mathbf{1}/n$ and $n$ items on each side, this is the assignment problem (up to a factor of $n$), and the answer is a permutation. The optimal cost is the Wasserstein (earth mover's) distance between $a$ and $b$. Solving it exactly is a linear program, roughly $O(n^3)$, and the solution jumps when $C$ changes, so you can't backpropagate through it cleanly.
+The constraints just say the row sums of $P$ are $a$ and the column sums are $b$. With $a = b = \mathbf{1}/n$ and $n$ items on each side, this is the assignment problem: there's always an optimal plan that is a permutation matrix divided by $n$. When $C_{ij}$ is a distance $d(x_i, y_j)$ raised to a power $p \ge 1$, the optimal cost is the Wasserstein distance $W_p^p$ (for $p = 1$, the earth mover's distance). Solving it exactly is a linear program, roughly $O(n^3)$, and the solution jumps when $C$ changes, so you can't backpropagate through it cleanly.
 
 Cuturi (2013) added an entropy term that rewards spread-out plans:
 
@@ -103,7 +103,7 @@ Each iteration is just two matrix–vector products, so it's fast, easy to batch
 - **Large ε**: the entropy term wins. The plan tends to $a b^\top$, which sends every source everywhere, and it converges in a few iterations.
 - **Small ε**: the plan gets close to the exact optimal plan. On a random $5 \times 5$ cost matrix, the arg-max of each row of $P$ matched the Hungarian algorithm's assignment for $\varepsilon = 0.1$ and below, and the cost at $\varepsilon = 0.01$ was within 0.1% of the exact optimum.
 
-Small ε comes at two costs. The number of iterations grows roughly like $1/\varepsilon$. And $e^{-C/\varepsilon}$ underflows to zero: with costs in $[0, 1]$ and $\varepsilon = 10^{-4}$, the plain loop above returns `nan`. The usual fix is to run the same iteration on logarithms, with dual potentials $f = \varepsilon \log u$ and $g = \varepsilon \log v$ and a numerically stable log-sum-exp:
+Small ε comes at two costs. Convergence gets much slower, so you need many more iterations. And $e^{-C/\varepsilon}$ underflows to zero: with random costs in $[0, 1]$ and $\varepsilon = 10^{-4}$, the plain loop above returns `nan`. The usual fix is to run the same iteration on logarithms, with dual potentials $f = \varepsilon \log u$ and $g = \varepsilon \log v$ and a numerically stable log-sum-exp:
 
 ```python
 from scipy.special import logsumexp

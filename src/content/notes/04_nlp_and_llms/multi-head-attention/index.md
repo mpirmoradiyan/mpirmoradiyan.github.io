@@ -23,7 +23,7 @@ sources:
 status: draft
 ---
 
-One attention head gives each token one set of weights. You can think of it as one opinion about which other tokens matter. But language has lots of kinds of relationships at once. A token might care about its subject, the previous word, a matching opening bracket and the topic of the paragraph, all at the same time. **Multi-head attention** just runs several separate attention computations side by side, each with its own query, key and value projections, and sticks the results together. I build it twice here: the easy-to-read way and the way real models do it.
+Once I had one attention head working, a question came up. One head gives each token one set of weights, so basically one opinion about which other tokens matter. But language has lots of kinds of relationships at once. A token might care about its subject, the previous word, a matching opening bracket and the topic of the paragraph, all at the same time. One opinion isn't enough. **Multi-head attention** just runs several separate attention computations side by side, each with its own query, key and value projections, and sticks the results together. I build it twice here: the easy-to-read way, then the way real models do it.
 
 ## The idea
 
@@ -71,7 +71,7 @@ My first multi-head version had no projection. It just glued the heads together.
 
 ## Version 2: one big matrix and a reshape
 
-Looping over heads means lots of small matrix multiplications, which is slow. The fast version computes the queries, keys and values for all heads in one go, then **reshapes** so the heads become an extra batch dimension.
+Version 1 is easy to read, but looping over heads means lots of small matrix multiplications, and that's slow. The fast version computes the queries, keys and values for all heads in one go, then **reshapes** so the heads become an extra batch dimension.
 
 ```python
 class MultiHeadAttention(nn.Module):
@@ -107,7 +107,7 @@ This took me a while to get. The whole trick is keeping track of the shapes:
 
 You need `contiguous()` because `transpose` only changes how PyTorch steps through memory (the strides), not the actual layout, and `view` needs memory laid out in order. `reshape` would do the copy for you.
 
-The way I think about it: one big (C, C) query matrix whose output is cut into $h$ slices is exactly the same as $h$ separate (C, $d_h$) query matrices placed side by side. So the two versions can learn exactly the same things. Only the speed is different. GPT-2 goes one step further and puts $W_q$, $W_k$ and $W_v$ into a single (768, 2304) layer called `c_attn`, which is what `self.qkv` above does.
+The way I think about it: one big (C, C) query matrix whose output is cut into $h$ slices is exactly the same as $h$ separate (C, $d_h$) query matrices placed side by side. So the two versions can learn exactly the same things. Only the speed is different. GPT-2 goes one step further and puts $W_q$, $W_k$ and $W_v$ into a single (768, 2304) layer called `c_attn`, which is what `self.qkv` above does (GPT-2's version also has a bias).
 
 ## Trying it on a toy batch
 

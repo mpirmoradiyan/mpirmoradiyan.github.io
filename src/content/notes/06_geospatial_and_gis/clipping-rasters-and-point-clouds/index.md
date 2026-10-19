@@ -31,7 +31,7 @@ Clipping sounds like nothing: keep what's inside the polygon, throw away the res
 
 ## Step 0: get both into the same CRS
 
-You can only compare a polygon and a raster if they're in the same coordinate reference system (CRS). Reproject the **polygon** to the raster's CRS, not the other way round. Reprojecting a vector just moves a few corner points, exactly. Reprojecting a raster resamples every pixel and changes the data. Always check the CRS of every input yourself. A GeoJSON file is in WGS 84 longitude and latitude by definition, while the raster is often in a metric projection like UTM. If you clip without reprojecting, you usually get an empty result, or an error saying the shapes don't overlap.
+You can only compare a polygon and a raster if they're in the same coordinate reference system (CRS). Reproject the **polygon** to the raster's CRS, not the other way round. Reprojecting a vector just moves its corner points, exactly. (Very long straight edges can bend in the new projection, so add extra vertices along them first if the polygon is big.) Reprojecting a raster resamples every pixel and changes the data. Always check the CRS of every input yourself. A GeoJSON file is in WGS 84 longitude and latitude by definition, while the raster is often in a metric projection like UTM. If you clip without reprojecting, you usually get an empty result, or an error saying the shapes don't overlap.
 
 ## Rasters: a window plus a mask
 

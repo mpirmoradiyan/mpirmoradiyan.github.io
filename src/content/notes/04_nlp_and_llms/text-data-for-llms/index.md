@@ -23,7 +23,7 @@ sources:
 status: draft
 ---
 
-A GPT learns just one thing: guess the next token. So before writing any model code, I had to figure out how to turn a plain text file into training examples of the right shape. These are my notes on that path: text file, then batches of token ids, then the vectors the first transformer layer actually gets. How text becomes ids in the first place is in my [tokenization note](/notes/tokenization-bpe/).
+A GPT learns just one thing: guess the next token. Sounds simple. But before writing any model code, I got stuck on a more basic question: how does a plain text file turn into training examples of the right shape? These are my notes on that path: text file, then batches of token ids, then the vectors the first transformer layer actually gets. How text becomes ids in the first place is in my [tokenization note](/notes/tokenization-bpe/).
 
 ## Step 1: the whole text becomes one long list of ids
 
@@ -41,7 +41,7 @@ With a big collection of texts you do the same thing one document at a time, and
 
 ## Inputs and targets: just shift by one
 
-Take `context_length` tokens in a row as the input `x`. The target `y` is the same window moved one token to the right. That's it.
+So what's the input and what's the answer? Take `context_length` tokens in a row as the input `x`. The target `y` is the same window moved one token to the right. That's it.
 
 ```python
 context_length = 4
@@ -62,7 +62,7 @@ A causal transformer (one that can only look backwards) makes a prediction at ev
 
 ## Sliding a window over the text
 
-To use the whole text, you slide the window along the list of ids. The **stride** is how far the window jumps each time.
+One window isn't much. To use the whole text, you slide the window along the list of ids. The **stride** is how far the window jumps each time.
 
 ```python
 import torch
@@ -105,7 +105,7 @@ Both give the same (B, T) shapes. The random version is handy when the whole tex
 
 ## From ids to vectors: the token embedding
 
-Token ids are just labels. Id 4920 isn't "bigger" or "more" than id 290 in any useful sense. So the first layer of the model is an **embedding table**: a matrix with one learnable row per token. Looking up a row is the same as multiplying a one-hot vector (all zeros except a single 1) by the matrix, just faster.
+Now the batch is a grid of integers. But token ids are just labels. Id 4920 isn't "bigger" or "more" than id 290 in any useful sense. So the first layer of the model is an **embedding table**: a matrix with one learnable row per token. Looking up a row is the same as multiplying a one-hot vector (all zeros except a single 1) by the matrix, just faster.
 
 ```python
 vocab_size, emb_dim = 50257, 256
@@ -118,7 +118,7 @@ The rows start out random and get trained along with the rest of the model. Over
 
 ## Telling the model where each token is
 
-This tripped me up at first: self-attention has no idea about order. It treats its input like a bag of tokens. If you shuffle the tokens, each output gets shuffled the same way but doesn't otherwise change. So word order has to be added by hand. GPT-2 does this with **learned absolute position embeddings**: a second table with one row per position, added on top of the token embeddings.
+This tripped me up at first: self-attention has no idea about order. It treats its input like a bag of tokens. If you shuffle the tokens (with no causal mask), each output gets shuffled the same way but doesn't otherwise change. So word order has to be added by hand. GPT-2 does this with **learned absolute position embeddings**: a second table with one row per position, added on top of the token embeddings.
 
 ```python
 pos_emb = torch.nn.Embedding(context_length, emb_dim)
@@ -126,7 +126,7 @@ pos_embeddings = pos_emb(torch.arange(context_length))   # (4, 256)
 input_embeddings = token_embeddings + pos_embeddings     # broadcasts to (8, 4, 256)
 ```
 
-The (T, 256) position tensor is broadcast (copied automatically) across the batch, so every sequence gets the same position vectors. The result has shape (B, T, emb_dim), and that's what goes into the first transformer block. There are other ways to encode position, like fixed sine waves or rotary embeddings; those go in a separate note on positional encoding.
+The (T, 256) position tensor is broadcast (copied automatically) across the batch, so every sequence gets the same position vectors. The result has shape (B, T, emb_dim), and that's what goes into the first transformer block. There are other ways to encode position, like the fixed sine waves of the original transformer or rotary embeddings, but GPT-2 uses the learned table.
 
 ## Key takeaways
 

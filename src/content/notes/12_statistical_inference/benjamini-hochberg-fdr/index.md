@@ -22,11 +22,11 @@ sources:
 status: draft
 ---
 
-When you run one test at the 5% level, a false alarm happens 5% of the time. When you run 4,702 tests, one per word feature in a text-classification dataset, as in one of my labs, you expect about 235 false alarms even if *no* feature matters. So "how many p-values are below 0.05" is the wrong question. The Benjamini–Hochberg (BH) procedure answers a better one: which features can I call significant while keeping the share of false discoveries among them small?
+In one of my labs I had a text dataset with 4,702 word features, and the task was to find which words really differ between two classes. My first move was to run a test per word and count the p-values below 0.05. Then the problem hit me. One test at the 5% level gives a false alarm 5% of the time. With 4,702 tests, you expect about 235 false alarms even if *no* word matters. So "how many p-values are below 0.05" is the wrong question. The Benjamini–Hochberg (BH) procedure answers a better one: which features can I call significant while keeping the share of false discoveries among them small?
 
 ## What can go wrong when testing many hypotheses
 
-Suppose we test $m$ null hypotheses and reject $R$ of them, and $V$ of those rejections are wrong (true nulls we rejected). Two ways to control errors:
+Say we test $m$ null hypotheses and reject $R$ of them, and $V$ of those rejections are wrong (true nulls we rejected). Two ways to control errors:
 
 - **Family-wise error rate**: $\text{FWER} = P(V \ge 1)$, the chance of even one false rejection. Bonferroni controls it by testing each hypothesis at $\alpha/m$. With $m$ in the thousands that's extremely strict, and you find almost nothing.
 - **False discovery rate**: $\text{FDR} = E\left[\frac{V}{\max(R, 1)}\right]$, the expected *fraction* of rejections that are false. Controlling FDR at 5% means "among the features I flag, on average at most 5% are noise". For screening many features this is usually what you want.

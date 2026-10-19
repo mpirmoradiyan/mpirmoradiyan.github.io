@@ -51,7 +51,7 @@ def match_channel(src, ref):
 matched = np.stack([match_channel(src[..., c], ref[..., c]) for c in range(3)], -1)
 ```
 
-This gives the same result as `skimage.exposure.match_histograms(src, ref, channel_axis=-1)`, within one grey level (the difference is rounding in the interpolation).
+This gives the same result as `skimage.exposure.match_histograms(src, ref, channel_axis=-1)`, within one grey level (scikit-image converts its float result back to the input's `uint8` type, while this version returns floats).
 
 **Where the per-channel version falls short.** Matching R, G and B separately gets each channel's histogram right, but it ignores how the channels move together. So you can end up with a colour that never appears in the reference, built from three channels that are each "correct" on their own. Matching is also heavy-handed: it stretches the sparse parts of the histogram, which boosts noise and can cause banding in smooth areas. You can see the extra grain in the third panel of the figure below.
 

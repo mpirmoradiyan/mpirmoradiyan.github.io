@@ -31,7 +31,7 @@ sources:
 status: draft
 ---
 
-After building a small GPT from scratch, I wanted to know how far it was from a real one. Turns out, not that far. GPT-2, released by OpenAI in 2019, uses the same decoder-only blocks, just bigger and with a few specific choices. Its smallest version has 124 million parameters and the weights are public. So you can open it up, look at every tensor, and write your own version that matches it name for name. That's what I did here.
+After building a small GPT from scratch, I kept wondering: how far is this toy from a real one? Turns out, not that far. GPT-2, released by OpenAI in 2019, uses the same decoder-only blocks, just bigger and with a few specific choices. Its smallest version has 124 million parameters and the weights are public. So you can open it up, look at every tensor, and write your own version that matches it name for name. That's what I did here.
 
 ## Loading the real model
 
@@ -83,7 +83,7 @@ GPT-2 doesn't use the fixed sine and cosine position codes from the original tra
 
 ![Three columns of GPT-2's learned position embedding table plotted against position from 0 to 1023. Each curve varies smoothly and slowly, like a low-frequency wave, with small jagged noise on top and sharp jumps at the very first positions.](fig-gpt2-position-embedding-columns.png)
 
-The curves are smooth waves over position. They look a lot like the sine waves the original transformer used on purpose, even though GPT-2 started from random noise and found this on its own. I found that pretty cool. Different features react to different ranges of positions. The jagged noise on top hints that the table isn't fully trained: neighbouring positions should have almost the same embedding, so a fully trained model would probably give smoother curves. Other ways to encode position, like rotary embeddings, go in a separate note.
+The curves are smooth waves over position. They look a lot like the sine waves the original transformer used on purpose, even though GPT-2 started from random noise and found this on its own. I found that pretty cool. Different features react to different ranges of positions. Karpathy points out that the jagged noise on top is a sign the model wasn't trained all the way: neighbouring positions should have almost the same embedding, so more training should smooth the curves out. Other ways to encode position, like rotary embeddings, go in a separate note.
 
 ## Rebuilding it in code
 
@@ -117,7 +117,7 @@ class CausalSelfAttention(nn.Module):
         return self.c_proj(y.transpose(1, 2).contiguous().view(B, T, C))
 ```
 
-`F.scaled_dot_product_attention` computes $\operatorname{softmax}(QK^\top/\sqrt{d_k} + M)V$ with the causal mask $M$ in one go (one fused GPU kernel). It gives the same result as the step-by-step version in the [multi-head attention note](/notes/multi-head-attention/), but it never keeps the full (T, T) matrix in memory. At T = 1,024 that really matters.
+`F.scaled_dot_product_attention` computes $\operatorname{softmax}(QK^\top/\sqrt{d_k} + M)V$ with the causal mask $M$ in one call. It gives the same result as the step-by-step version in the [multi-head attention note](/notes/multi-head-attention/). On a GPU it can use a fused "flash attention" kernel that never stores the full (T, T) matrix in memory. At T = 1,024 that really matters.
 
 ```python
 class MLP(nn.Module):
@@ -164,7 +164,7 @@ A few things I want to remember:
 
 - **GELU** is a smooth version of ReLU, $\text{GELU}(x) = x\,\Phi(x)$ with $\Phi$ the standard normal CDF. GPT-2 used a tanh-based approximation of it, so you need `approximate="tanh"` to get exactly the same outputs.
 - **Names matter.** My first version called the layer norms `ln1` and `ln2`. The model ran fine, but its state dict keys didn't match `ln_1` and `ln_2` in the official checkpoint, so loading the weights by name would have failed.
-- **Transposed weights.** This one confused me at first. OpenAI's code used a `Conv1D` module that stores its weight as (in, out), while `nn.Linear` stores (out, in). That's why `c_attn.weight` shows up as (768, 2304) in the table above. So when you copy the official weights into `nn.Linear` layers, you have to transpose the `c_attn`, `c_proj` and `c_fc` matrices.
+- **Transposed weights.** This one confused me at first. The original GPT-2 code (and the Hugging Face port of it) uses a `Conv1D` module that stores its weight as (in, out), while `nn.Linear` stores (out, in). That's why `c_attn.weight` shows up as (768, 2304) in the table above. So when you copy the official weights into `nn.Linear` layers, you have to transpose the `c_attn`, `c_proj` and `c_fc` matrices.
 
 ## Sampling from the real thing
 

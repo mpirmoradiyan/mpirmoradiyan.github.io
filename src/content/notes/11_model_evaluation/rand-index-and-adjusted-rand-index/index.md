@@ -26,11 +26,11 @@ sources:
 status: draft
 ---
 
-After clustering product reviews with k-means, the text mining lab asked: if we have the true product categories for some reviews, how do we score the clustering? Cluster numbers are arbitrary ("cluster 2" isn't "books"), so you can't just compute accuracy. The Rand index gets around that by looking at **pairs** of documents. I used the adjusted version in the lab without thinking much about the difference, and the difference turns out to be the whole point.
+After clustering product reviews with k-means, the text mining lab asked a question that stumped me for a moment: if we have the true product categories for some reviews, how do we score the clustering? Cluster numbers are arbitrary ("cluster 2" isn't "books"), so you can't just compute accuracy. The Rand index gets around that by looking at **pairs** of documents. I used the adjusted version in the lab without thinking much about the difference, and the difference turns out to be the whole point.
 
 ## The Rand index: a classifier on pairs
 
-Take every unordered pair of documents. For each pair, the clustering makes a yes/no claim: "these two are in the same cluster". The gold labels give the true answer: "these two have the same category". Count:
+Here's the trick. Take every unordered pair of documents. For each pair, the clustering makes a yes/no claim: "these two are in the same cluster". The gold labels give the true answer: "these two have the same category". Count:
 
 - $a$: pairs in the same cluster **and** the same category (true positives)
 - $b$: pairs in different clusters **and** different categories (true negatives)
@@ -47,7 +47,7 @@ So the mapping I wrote in the lab (cluster 0 → "book", cluster 1 → "camera",
 
 ## The problem: RI rewards many clusters
 
-With 6 categories, most pairs of documents have *different* categories. A clustering with many small clusters says "different" for almost every pair, and it's right most of the time. So RI climbs as $k$ grows, even when the clusters are pure noise. The same thing happens with accuracy on imbalanced classes: "different" is the majority class.
+So why bother with an "adjusted" version? With 6 categories, most pairs of documents have *different* categories. A clustering with many small clusters says "different" for almost every pair, and it's right most of the time. So RI climbs as $k$ grows, even when the clusters are pure noise. The same thing happens with accuracy on imbalanced classes: "different" is the majority class.
 
 ```python
 import numpy as np
@@ -84,7 +84,7 @@ We fit k-means on all 11,914 reviews (tf-idf vectors) and scored the first 500 a
 
 $k = 1$ gives exactly 0 by construction: one cluster carries no information. Since ARI corrects for chance, the rise from 3 to 7 means the clusters really matched the categories better, not just that there were more of them. That fits the cluster summaries (the top terms of each centroid). With $k=3$, books and cameras got clean clusters and everything else landed in one mixed cluster. With $k = 5$ to $7$, music, movies and software split off as well.
 
-The lab asked for the plain (unadjusted) Rand index. It would probably have gone up with $k$ too, but on its own that rise wouldn't prove anything, because, as the simulation shows, RI rises with $k$ even for random clusters.
+The lab asked for the plain (unadjusted) Rand index. A rise in plain RI with $k$ wouldn't prove anything on its own, because, as the simulation shows, RI rises with $k$ even for random clusters.
 
 ## Key takeaways
 

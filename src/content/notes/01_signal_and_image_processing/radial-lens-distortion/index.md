@@ -51,7 +51,7 @@ The full model also has two **tangential** terms, $p_1$ and $p_2$, for lenses wh
 
 ## Warping an image: think backwards
 
-To make a distorted image, the obvious idea is to take each input pixel and move it to its new spot. But that leaves holes and overlaps in the output. The usual way goes the other direction: for each **output** pixel, work out where it should come from in the **input**, and sample the input there (with interpolation). This is called **inverse mapping**, and it's what `cv2.remap` and `scipy.ndimage.map_coordinates` do.
+To make a distorted image, the obvious idea is to take each input pixel and move it to its new spot. But that leaves holes and overlaps in the output. The usual way goes the other direction: for each **output** pixel, work out where it should come from in the **input**, and sample the input there (with interpolation). This is called **inverse mapping**, and it's what `cv2.remap` and `scipy.ndimage.map_coordinates` do (more in [geometric transformations and homographies](/notes/geometric-transformations-and-homographies/)).
 
 That flip is easy to get confused by, and it confused me. In my notebook I used the formula $x(1 + k r^2)$ with $k > 0$ to compute *source* positions for a regular output grid, and I got barrel distortion, not pincushion. Both are correct: if output pixel $x$ looks up the input at $x(1 + kr^2)$, the output shows content from further out, so the picture gets squeezed towards the centre. The formula above with $k_1 > 0$ describes the forward direction; used as a lookup, it does the opposite.
 

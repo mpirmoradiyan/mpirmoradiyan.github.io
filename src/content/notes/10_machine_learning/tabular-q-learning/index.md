@@ -22,7 +22,7 @@ sources:
 status: draft
 ---
 
-Q-learning is the "hello world" of reinforcement learning: an agent wanders around a grid, gets rewards in some cells, and learns which action to take in each cell. In the third Advanced Machine Learning lab I implemented the greedy and $\epsilon$-greedy policies and the Q-learning update, then watched how the learned policy changed with the exploration rate, the discount factor and a "slip" probability. The last part changed how I think about the word *optimal*.
+Q-learning is the "hello world" of reinforcement learning. Picture an agent wandering around a grid. Some cells give rewards, and it slowly learns which way to go from each cell. In the third Advanced Machine Learning lab I coded the greedy and $\epsilon$-greedy policies and the Q-learning update myself. Then I played with three knobs: the exploration rate, the discount factor and a "slip" probability. The slip part tripped me up. I called the agent's behaviour a failure when it was actually the right answer, and that changed how I think about the word *optimal*.
 
 ## Action values and the update
 
@@ -40,7 +40,7 @@ $$
 
 where $\alpha$ is the learning rate. The bracket compares the current guess $Q(s,a)$ with a slightly better-informed guess: the reward you actually got plus the discounted value of the best action in the next state. At a terminal state there's no future, so the target is just $r$.
 
-The $\max$ is what makes Q-learning *off-policy*: it learns the value of acting greedily even while the agent behaves more randomly. Summing the TD errors over an episode is a handy convergence signal; it shrinks as the table settles.
+The $\max$ is what makes Q-learning *off-policy*: it learns the value of acting greedily even while the agent behaves more randomly. Adding up the sizes of the TD errors over an episode is a handy convergence signal; it shrinks as the table settles.
 
 ## Exploration: $\epsilon$-greedy
 
