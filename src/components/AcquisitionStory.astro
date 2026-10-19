@@ -25,7 +25,10 @@ const steps = [
   {
     title: "The recording truck",
     text: "Cables carry every signal to the recording truck. This is where QC happens: we checked each shot live on the monitors, looking for dead channels, noise and wrong positions, before the crew moved on to the next shot.",
-    photo: { src: "/images/field/recording-truck-in-the-field.jpg", alt: "The recording truck in the field" },
+    photos: [
+      { src: "/images/field/recording-truck-in-the-field.jpg", alt: "The recording truck in the field" },
+      { src: "/images/field/recording-system-qc-monitors.jpg", alt: "Inside: the QC monitors of the recording system" },
+    ],
   },
   {
     title: "A shot gather",
@@ -172,6 +175,7 @@ const rayPath = (rx: number, y: number) => `M${src.x},${src.y} L${(src.x + rx) /
           <h3>{s.title}</h3>
           <p>{s.text}</p>
           {s.photo && <img src={s.photo.src} alt={s.photo.alt} loading="lazy" />}
+          {s.photos && <div class="pair">{s.photos.map((p) => <img src={p.src} alt={p.alt} loading="lazy" />)}</div>}
         </li>
       ))}
     </ol>
@@ -288,6 +292,8 @@ const rayPath = (rx: number, y: number) => `M${src.x},${src.y} L${(src.x + rx) /
   .acq-step p { margin: 0; color: var(--ink-soft); }
   .acq-step img { margin-top: .9rem; border-radius: 10px; border: 1px solid var(--line); aspect-ratio: 16 / 10; object-fit: cover; width: 100%; }
   .acq-note { font-size: .85rem; margin-top: .5rem; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .9rem; }
+  .acq-step .pair img { margin-top: 0; aspect-ratio: 4 / 3; }
 
   @media (max-width: 860px) {
     .acq-grid { grid-template-columns: 1fr; gap: 1rem; }
