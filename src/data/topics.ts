@@ -5,7 +5,12 @@ export const topics = [
   { key: "Signal & Image Processing", slug: "signal", blurb: "Waves, wavelets, Fourier transforms, filters and image statistics." },
   { key: "Deep Learning Foundations", slug: "deep-learning", blurb: "Backpropagation, normalisation, losses and the plumbing of training." },
   { key: "NLP & LLMs", slug: "nlp", blurb: "From bigram models to attention and GPT, built up from scratch." },
-  { key: "ML & Statistics", slug: "ml-stats", blurb: "Validation, ensembles, error analysis and the maths around models." },
+  { key: "Machine Learning", slug: "machine-learning", blurb: "Clustering, trees and forests, SVMs, ensembles and the first steps of reinforcement learning." },
+  { key: "Model Evaluation", slug: "evaluation", blurb: "Honest validation, thresholds, imbalance and reading errors beyond one number." },
+  { key: "Statistical Inference", slug: "inference", blurb: "Bootstrap, permutation tests, multivariate tests, multiple testing and missing data." },
+  { key: "Bayesian Methods", slug: "bayesian", blurb: "Priors, posteriors, credible intervals, Bayesian networks and Gaussian processes." },
+  { key: "Computational Statistics", slug: "computational-stats", blurb: "MCMC, random number generation, optimisation, EM and the numerics underneath." },
+  { key: "Time Series & State Space", slug: "time-series", blurb: "AR models, Kalman filters and smoothers, particle filters and hidden Markov models." },
   { key: "Programming & Data", slug: "programming", blurb: "Spark and SQL, algorithms, floating-point numbers and making code fast." },
 ];
 export const readingMinutes = (body: string = "") => Math.max(3, Math.round(body.replace(/```[\s\S]*?```/g, "").split(/\s+/).length / 220));
