@@ -26,7 +26,10 @@ const when = note.data.date.toLocaleDateString("en-GB", { month: "long", year: "
       <p class="meta">
         <span>First explored {when}</span><span>·</span><span>{readingMinutes(note.body)} min read</span>
       </p>
-      <div class="tags">{note.data.tags.map((g) => <span class="chip">{g}</span>)}</div>
+      {note.data.tags.includes("university-lab") && (
+        <p class="lab-note"><span class="lab-badge">University lab</span> From my coursework in the MSc in Statistics and Machine Learning at <a href="/journey/msc-statistics-ml/">Linköping University</a>, rewritten as a note to review later.</p>
+      )}
+      <div class="tags">{note.data.tags.filter((g) => g !== "university-lab").map((g) => <span class="chip">{g}</span>)}</div>
     </header>
     <aside class="toc" aria-label="On this page">
       <p class="eyebrow">On this page</p>
@@ -46,6 +49,8 @@ const when = note.data.date.toLocaleDateString("en-GB", { month: "long", year: "
   .note-head h1 { font-size: clamp(1.9rem, 4.2vw, 2.8rem); }
   .back { font-size: .9rem; text-decoration: none; display: inline-block; margin-bottom: 1rem; }
   .meta { display: flex; gap: .5rem; flex-wrap: wrap; font-family: var(--mono); font-size: .8rem; color: var(--muted); margin: 0 0 .8rem; }
+  .lab-note { font-size: .92rem; color: var(--ink-soft); background: var(--signal-soft); border-radius: 10px; padding: .6rem .9rem; margin: 0 0 .9rem; }
+  .lab-badge { font-family: var(--mono); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--signal); margin-right: .4rem; }
   .tags { display: flex; gap: .35rem; flex-wrap: wrap; }
   .prose { grid-column: 1; grid-row: 2; min-width: 0; }
   .toc { grid-column: 2; grid-row: 2; position: sticky; top: 88px; align-self: start; font-size: .88rem; }

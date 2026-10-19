@@ -2,7 +2,7 @@
 title: "Choosing a C++ STL container: complexity, memory layout and the usual traps"
 slug: choosing-cpp-stl-containers
 date: 2025-03-30
-topic: Programming & Performance
+topic: Programming & Data
 tags: [cpp, stl, data-structures, complexity, vector, map, unordered_map, priority-queue]
 summary: "How to pick between vector, deque, list, set/map, unordered_set/unordered_map and the adapters (stack, queue, priority_queue), based on what each one costs and how it sits in memory."
 sources:

@@ -1,10 +1,10 @@
 ---
-interface Props { id: string; title: string; summary: string; topic: string; date: Date; minutes?: number }
-const { id, title, summary, topic, date, minutes } = Astro.props;
+interface Props { id: string; title: string; summary: string; topic: string; date: Date; minutes?: number; lab?: boolean }
+const { id, title, summary, topic, date, minutes, lab } = Astro.props;
 const when = date.toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
 ---
 <a class="note-card card" href={`/notes/${id}/`}>
-  <div class="meta"><span class="chip">{topic}</span><span class="muted">{when}{minutes ? ` · ${minutes} min` : ""}</span></div>
+  <div class="meta"><span class="chip">{topic}</span>{lab && <span class="chip lab">University lab</span>}<span class="muted">{when}{minutes ? ` · ${minutes} min` : ""}</span></div>
   <h3>{title}</h3>
   <p>{summary}</p>
 </a>
@@ -13,5 +13,6 @@ const when = date.toLocaleDateString("en-GB", { month: "short", year: "numeric",
   .note-card:hover { transform: translateY(-3px); border-color: var(--forest-soft); }
   .note-card h3 { margin: 0; font-size: 1.12rem; line-height: 1.3; color: var(--ink); }
   .note-card p { margin: 0; color: var(--muted); font-size: .93rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .lab { background: var(--signal-soft); border-color: transparent; color: var(--signal); }
   .meta { display: flex; gap: .6rem; align-items: center; font-size: .8rem; flex-wrap: wrap; }
 </style>

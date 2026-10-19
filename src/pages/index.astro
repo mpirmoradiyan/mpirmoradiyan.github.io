@@ -64,7 +64,7 @@ const years = new Set(notes.map((n) => n.data.date.getUTCFullYear()));
     </div>
     <p class="muted" style="margin-top:.8rem">The latest note from each topic. Short, single-topic articles written from my own notebooks and experiments, spanning {Math.min(...years)} to {Math.max(...years)}.</p>
     <div class="grid">
-      {latest.map((n) => <NoteCard id={n.id} title={n.data.title} summary={n.data.summary} topic={n.data.topic} date={n.data.date} minutes={readingMinutes(n.body)} />)}
+      {latest.map((n) => <NoteCard id={n.id} title={n.data.title} summary={n.data.summary} topic={n.data.topic} date={n.data.date} minutes={readingMinutes(n.body)} lab={n.data.tags.includes("university-lab")} />)}
     </div>
   </section>
 </Base>

@@ -6,6 +6,6 @@ export const topics = [
   { key: "Deep Learning Foundations", slug: "deep-learning", blurb: "Backpropagation, normalisation, losses and the plumbing of training." },
   { key: "NLP & LLMs", slug: "nlp", blurb: "From bigram models to attention and GPT, built up from scratch." },
   { key: "ML & Statistics", slug: "ml-stats", blurb: "Validation, ensembles, error analysis and the maths around models." },
-  { key: "Programming & Performance", slug: "programming", blurb: "Making code fast: data structures, profiling and parallel Python." },
+  { key: "Programming & Data", slug: "programming", blurb: "Spark and SQL, algorithms, floating-point numbers and making code fast." },
 ];
 export const readingMinutes = (body: string = "") => Math.max(3, Math.round(body.replace(/```[\s\S]*?```/g, "").split(/\s+/).length / 220));

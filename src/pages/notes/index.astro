@@ -12,7 +12,7 @@ const index = all.map((n) => ({ id: n.id, t: n.data.title, s: n.data.summary, g:
   <section class="container head">
     <p class="eyebrow">Lab notes</p>
     <h1>Things I learned by building them</h1>
-    <p class="lead">Over the years I have tried ideas in notebooks while reading, watching lectures or solving problems at work. These are those experiments, rewritten as short articles: one idea per note, explained plainly, with code that runs and the sources I learned from.</p>
+    <p class="lead">Over the years I have tried ideas in notebooks while reading, watching lectures, doing university labs or solving problems at work. These are those experiments, rewritten as short articles: one idea per note, explained plainly, with code that runs and the sources I learned from.</p>
     <p class="muted">{all.length} notes · {byTopic.length} topics · {Math.min(...years)}–{Math.max(...years)} · dates show when I first explored each topic.</p>
 
     <div class="controls">
@@ -33,7 +33,7 @@ const index = all.map((n) => ({ id: n.id, t: n.data.title, s: n.data.summary, g:
       <section class="topic" data-topic={t.key} id={t.slug}>
         <div class="topic-head"><h2>{t.key}</h2><p class="muted">{t.blurb}</p></div>
         <div class="grid">
-          {t.notes.map((n) => <div class="item" data-id={n.id}><NoteCard id={n.id} title={n.data.title} summary={n.data.summary} topic={n.data.topic} date={n.data.date} minutes={readingMinutes(n.body)} /></div>)}
+          {t.notes.map((n) => <div class="item" data-id={n.id}><NoteCard id={n.id} title={n.data.title} summary={n.data.summary} topic={n.data.topic} date={n.data.date} minutes={readingMinutes(n.body)} lab={n.data.tags.includes("university-lab")} /></div>)}
         </div>
       </section>
     ))}
