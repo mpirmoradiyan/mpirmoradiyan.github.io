@@ -119,6 +119,7 @@ export const details: Record<string, StopDetail> = {
           "Mentored new and junior geophysicists, and advised an MSc student on her thesis.",
           "Was recognised as one of the company's best seismic acquisition supervisors in 2015.",
         ],
+        photo: { src: "/images/field/field-visit-university-students.jpg", alt: "Explaining seismic acquisition to a group of university students in the field" },
       },
       {
         heading: "What carried over into computer vision",
@@ -171,9 +172,8 @@ export const details: Record<string, StopDetail> = {
       ],
     },
     photosTop: [
-      { src: "/images/field/field-visit-university-students.jpg", alt: "Explaining seismic acquisition to a group of university students in the field" },
       { src: "/images/field/vibroseis-fleet-at-sunset.jpg", alt: "The vibroseis fleet at sunset" },
-      { src: "/images/field/folded-mountain-geology.jpg", alt: "Folded mountain geology, the target of the surveys" },
+      { src: "/images/field/shot-gather-printout.jpg", alt: "Printed shot records, turned so time runs down: each peak sits at a shot, and everything arrives later at geophones farther away" },
     ],
     photos: [
       { src: "/images/field/field-survey-with-maps.jpg", alt: "Scouting a survey area with the line maps" },
