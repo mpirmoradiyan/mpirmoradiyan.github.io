@@ -34,10 +34,11 @@ const years = new Set(notes.map((n) => n.data.date.getUTCFullYear()));
         <article class="chapter card reveal" style={`transition-delay:${i * 120}ms`}>
           <div class="num">0{i + 1}</div>
           <p class="period">{c.period}</p>
-          <h3>{c.title}</h3>
+          <h3><a class="stretch" href={`/journey/${c.slug}/`}>{c.title}</a></h3>
           <p class="place">{c.place}</p>
           <p>{c.text}</p>
           <p class="carries"><span>Carried forward</span>{c.carries}</p>
+          <p class="more" aria-hidden="true">Read the story <span>→</span></p>
         </article>
       ))}
     </div>
@@ -77,12 +78,20 @@ const years = new Set(notes.map((n) => n.data.date.getUTCFullYear()));
   .hero h1 { font-size: clamp(2.6rem, 7vw, 4.6rem); }
   .cta { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1.6rem; }
   .chapters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin-top: 2rem; }
-  .chapter { padding: 1.5rem; position: relative; }
+  .chapter { padding: 1.5rem; position: relative; display: flex; flex-direction: column; transition: transform .25s ease, border-color .25s ease; }
+  .chapter:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--signal) 45%, var(--line)); }
+  .stretch { color: inherit; text-decoration: none; }
+  .stretch::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+  .stretch:focus-visible { outline: none; }
+  .chapter:has(.stretch:focus-visible) { outline: 2px solid var(--signal); outline-offset: 3px; }
+  .more { margin: .9rem 0 0; padding-top: .2rem; font-weight: 600; font-size: .9rem; color: var(--forest); margin-top: auto; }
+  .more span { display: inline-block; transition: transform .2s ease; }
+  .chapter:hover .more span { transform: translateX(4px); }
   .chapter .num { position: absolute; top: 1rem; right: 1.2rem; font-family: var(--serif); font-size: 2.4rem; color: var(--line); font-weight: 700; }
   .chapter h3 { margin: .2rem 0 .2rem; font-size: 1.35rem; padding-right: 2.6rem; }
   .period { font-family: var(--mono); font-size: .8rem; color: var(--signal); margin: 0; }
   .place { color: var(--muted); font-size: .9rem; }
-  .carries { border-top: 1px dashed var(--line); padding-top: .8rem; margin: 0; font-size: .92rem; color: var(--ink-soft); }
+  .carries { border-top: 1px dashed var(--line); padding-top: .8rem; margin: 0 0 .9rem; font-size: .92rem; color: var(--ink-soft); }
   .carries span { display: block; font-family: var(--mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--forest); margin-bottom: .2rem; }
   .band { background: var(--bg-soft); border-block: 1px solid var(--line); }
   .two { display: grid; grid-template-columns: 1fr 1.4fr; gap: 3rem; align-items: start; }

@@ -11,6 +11,7 @@ export const profile = {
 export const chapters = [
   {
     period: "2005 – 2019",
+    slug: "nisoc",
     title: "Reading the earth",
     place: "Seismic field operations, NISOC",
     text: "Fourteen years on land seismic crews, from junior to senior QC supervisor: making sure every sensor recording was clean, consistent and in the right place before anyone built on it.",
@@ -18,6 +19,7 @@ export const chapters = [
   },
   {
     period: "2019 – 2021",
+    slug: "msc-statistics-ml",
     title: "Learning the language",
     place: "MSc Statistics & Machine Learning, Linköping University",
     text: "A second master's degree to turn field intuition into modelling skill, finished with a thesis on anomaly detection and causal inference in 5G networks together with Ericsson Research.",
@@ -25,6 +27,7 @@ export const chapters = [
   },
   {
     period: "2022 – today",
+    slug: "arboair",
     title: "Reading the forest from above",
     place: "Arboair AB, Linköping",
     text: "Computer vision for drone and aerial imagery of forests: I designed and lead the company's computer-vision platform and the models that map tree species and forest damage.",
