@@ -30,10 +30,14 @@ const skills = [
       <p class="contact">
         <span>{profile.location}</span>
         <a href={`mailto:${profile.email}`}>{profile.email}</a>
-        <a href={profile.linkedin}>LinkedIn</a>
-        <a href={profile.github}>GitHub</a>
+        <a href={profile.linkedin}><span class="screen-only">LinkedIn</span><span class="print-only">linkedin.com/in/mohsen-pirmoradiyan</span></a>
+        <a href={profile.github}><span class="screen-only">GitHub</span><span class="print-only">github.com/mpirmoradiyan</span></a>
+        <a class="print-only" href="https://mpirmoradiyan.github.io">mpirmoradiyan.github.io</a>
       </p>
-      <p class="noprint"><button class="btn" onclick="window.print()">Print or save as PDF</button></p>
+      <p class="noprint actions">
+        <a class="btn primary" href="/docs/Mohsen_Pirmoradiyan_CV.pdf" download>Download PDF</a>
+        <button class="btn" onclick="window.print()">Print</button>
+      </p>
     </header>
 
     <section>
@@ -53,7 +57,8 @@ const skills = [
         <div><h3>Seismic Data Acquisition QC Supervisor (junior to senior)</h3><p class="where">National Iranian South Oil Company (NISOC), Khuzestan, Iran</p>
           <ul>
             <li>Quality control of 2D and 3D land seismic acquisition in deserts, sand dunes and mountains: recording quality, geometry and field procedures.</li>
-            <li>Supervised acquisition contractors' field work and reviewed survey design and field data before processing.</li>
+            <li>Supervised acquisition in more than five oil fields, with dynamite and vibroseis sources; reviewed survey design and field data before processing.</li>
+            <li>Mentored junior geophysicists; recognised as one of the company's best seismic acquisition supervisors in 2015.</li>
           </ul></div>
       </div>
     </section>
@@ -72,7 +77,7 @@ const skills = [
 
     <section>
       <h2>Learning in public</h2>
-      <p>I keep short <a href="/notes/">learning notes</a> on what I learn: computer vision, geospatial data, signal processing and machine learning.</p>
+      <p>I keep short <a href="/notes/">learning notes</a> on what I learn: computer vision, geospatial data, signal processing, statistics and machine learning.<span class="print-only"> mpirmoradiyan.github.io/notes</span></p>
     </section>
   </div>
 </Base>
@@ -96,9 +101,34 @@ const skills = [
   .noprint { margin-top: 1rem; }
   .noprint .btn { cursor: pointer; font: inherit; font-weight: 600; font-size: .9rem; }
   @media (max-width: 620px) { .entry, .skills { grid-template-columns: 1fr; gap: .2rem; } }
+  .print-only { display: none; }
+  .actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+  @page { size: A4; margin: 13mm 14mm 13mm 14mm; }
   @media print {
-    :global(.site-header), :global(.site-footer), .noprint { display: none !important; }
-    :global(body) { background: #fff; color: #000; font-size: 11pt; }
-    .cv { width: 100%; padding: 0; }
+    :global(:root:root:root) {
+      --bg: #fff; --bg-soft: #fff; --surface: #fff; --ink: #111; --ink-soft: #222; --muted: #555; --line: #ccc;
+      --forest: #1f4d3a; --signal: #a85a14; color-scheme: light;
+    }
+    :global(.site-header), :global(.site-footer), .noprint, .screen-only { display: none !important; }
+    .print-only { display: inline; }
+    :global(html), :global(body) { background: #fff !important; color: #111; font-size: 9.6pt; line-height: 1.38; }
+    :global(main) { padding: 0 !important; margin: 0 !important; }
+    .cv { width: 100%; max-width: none; padding: 0; margin: 0; }
+    .cv section { padding: 0 !important; margin: 0; }
+    .cv header { padding-bottom: .45rem; margin-bottom: .2rem; border-bottom-width: 1.5px; }
+    .cv h1 { font-size: 22pt; margin: 0; }
+    .role { font-size: 12.5pt; margin: .05rem 0 .3rem; }
+    .contact { gap: .25rem 1rem; font-size: 8.8pt; color: #333; }
+    .contact a { color: #111; text-decoration: none; }
+    .cv h2 { font-size: 10.5pt; margin: .85rem 0 .35rem; padding-bottom: .1rem; border-bottom: 1px solid #ddd; break-after: avoid; }
+    .entry { grid-template-columns: 96px 1fr; gap: .55rem; margin-bottom: .55rem; break-inside: avoid; }
+    .when { font-size: 8.2pt; padding-top: .1rem; color: #444; }
+    .entry h3 { font-size: 10.5pt; }
+    .where { font-size: 8.9pt; margin: 0 0 .2rem; color: #444; }
+    .entry li { font-size: 9.2pt; margin: .12em 0; }
+    .entry p { margin: 0 0 .2rem; }
+    .skills { grid-template-columns: 128px 1fr; gap: .15rem .7rem; font-size: 9.1pt; }
+    a { color: inherit; text-decoration: none; }
+    p { orphans: 3; widows: 3; }
   }
 </style>
